@@ -5,6 +5,15 @@ require_once __DIR__ . '/player_repository.php';
 require_once __DIR__ . '/../config/player_config.php';
 $razorpay_cfg = require __DIR__ . '/../config/razorpay_config.php';
 
+// Optional: try to load Razorpay PHP SDK if available
+if (file_exists(__DIR__ . '/../vendor/autoload.php')) {
+    require_once __DIR__ . '/../vendor/autoload.php';
+} elseif (file_exists(__DIR__ . '/../razorpay-php/Razorpay.php')) {
+    require_once __DIR__ . '/../razorpay-php/Razorpay.php';
+}
+
+use Razorpay\Api\Api;
+
 // Authentication: Only logged-in users can fill/edit profile
 require_auth();
 $phone = current_user();
@@ -16,23 +25,7 @@ $csrf = $_SESSION['csrf'];
 $msg_error = '';
 $msg_success = '';
 $should_start_payment = false;
-$start_payment_amount_paise = 0;
-
-// If redirected from POST flow we may have flash messages
-if (!empty($_SESSION['flash_msg_success'])) {
-    $msg_success = $_SESSION['flash_msg_success'];
-    unset($_SESSION['flash_msg_success']);
-}
-if (!empty($_SESSION['flash_msg_error'])) {
-    $msg_error = $_SESSION['flash_msg_error'];
-    unset($_SESSION['flash_msg_error']);
-}
-
-// If redirected with start_payment GET params, prepare JS trigger
-if (isset($_GET['start_payment']) && $_GET['start_payment'] === '1' && isset($_GET['amount_paise'])) {
-    $should_start_payment = true;
-    $start_payment_amount_paise = max(100, (int)$_GET['amount_paise']); // enforce min ₹1 (100 paise)
-}
+$razorpay_order = null;
 
 // Load existing player profile if available
 $player = player_get_by_phone($phone) ?? ['mobile' => $phone];
@@ -247,19 +240,85 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && hash_equals($csrf, $_POST['csrf'] ?
         }
     }
 
-    // If user requested to start payment after successful save, redirect to same page with start params
+    // If user requested to start payment after successful save, create a Razorpay order server-side and open Checkout
     if ($start_payment_requested && empty($msg_error) && !empty($msg_success)) {
         // derive amount from posted field (in rupees) or use demo default (1)
         $amt_rupees = (float)str_replace(',', '.', ($_POST['payment_amount'] ?? '1'));
         // Enforce minimum 100 paise (₹1) to avoid 1 paise issues in demo
-        $start_payment_amount_paise = max(100, (int) round($amt_rupees * 100));
+        $amount_paise = max(100, (int) round($amt_rupees * 100));
 
-        // store flash message so after redirect user sees confirmation
-        $_SESSION['flash_msg_success'] = $msg_success;
+        // Create Razorpay order using API keys from config
+        $keyId = $razorpay_cfg['key_id'] ?? '';
+        $keySecret = $razorpay_cfg['key_secret'] ?? '';
 
-        // Redirect to self with start_payment=1 and amount_paise to reliably trigger client JS after a GET
-        header('Location: /userpanel/player_profile.php?start_payment=1&amount_paise=' . urlencode((int)$start_payment_amount_paise));
-        exit;
+        if (empty($keyId) || empty($keySecret)) {
+            $msg_error = 'Payment configuration missing. Please contact admin.';
+        } else {
+            try {
+                // Use SDK if available, otherwise fallback to cURL
+                if (class_exists('\Razorpay\Api\Api')) {
+                    $api = new Api($keyId, $keySecret);
+                    $receipt = 'player_' . ($player['id'] ?? 'na') . '_' . time();
+                    $order = $api->order->create([
+                        'amount' => $amount_paise,
+                        'currency' => 'INR',
+                        'receipt' => $receipt,
+                        'payment_capture' => 1,
+                    ]);
+                    $razorpay_order = $order;
+                } else {
+                    // cURL fallback
+                    $receipt = 'player_' . ($player['id'] ?? 'na') . '_' . time();
+                    $payload = json_encode([
+                        'amount' => $amount_paise,
+                        'currency' => 'INR',
+                        'receipt' => $receipt,
+                        'payment_capture' => 1,
+                    ]);
+                    $ch = curl_init('https://api.razorpay.com/v1/orders');
+                    curl_setopt($ch, CURLOPT_USERPWD, $keyId . ':' . $keySecret);
+                    curl_setopt($ch, CURLOPT_POST, true);
+                    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+                    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+                    $resp = curl_exec($ch);
+                    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                    curl_close($ch);
+                    if ($httpCode >= 200 && $httpCode < 300) {
+                        $razorpay_order = json_decode($resp, true);
+                    } else {
+                        error_log('Razorpay order create failed: ' . $resp);
+                        $msg_error = 'Failed to initiate payment. Try again later.';
+                    }
+                }
+
+                if ($razorpay_order) {
+                    // Optionally record order in local payments table (if you have a payments repo)
+                    if (function_exists('payment_create_local_order')) {
+                        // payment_create_local_order should be implemented in your payment_repository.php
+                        @payment_create_local_order([
+                            'order_id' => $razorpay_order['id'] ?? $razorpay_order->id ?? null,
+                            'user_mobile' => $phone,
+                            'amount' => $amount_paise,
+                            'currency' => 'INR',
+                            'status' => 'created',
+                            'meta' => json_encode(['player_id' => $player['id'] ?? null]),
+                        ]);
+                    }
+
+                    // Prepare to open checkout on page render
+                    $should_start_payment = true;
+                    $start_payment_amount_paise = $amount_paise;
+                    // store success message as flash for GET render
+                    $_SESSION['flash_msg_success'] = $msg_success;
+                } else {
+                    if (empty($msg_error)) $msg_error = 'Unable to create payment order.';
+                }
+            } catch (Throwable $e) {
+                error_log('Razorpay create order exception: ' . $e->getMessage());
+                $msg_error = 'Failed to initiate payment. Please try again.';
+            }
+        }
     }
 }
 
@@ -298,6 +357,15 @@ function h(?string $v): string { return htmlspecialchars((string)$v, ENT_QUOTES,
 // Default payment amount (rupees) — demo uses 1 INR
 $default_payment_amount = 1; // rupees (demo)
 
+// If we created an order server-side, determine its id to pass to client
+$created_order_id = null;
+if (!empty($razorpay_order)) {
+    $created_order_id = is_array($razorpay_order) ? ($razorpay_order['id'] ?? null) : ($razorpay_order->id ?? null);
+    // ensure start_payment amount is set
+    if (empty($start_payment_amount_paise) && !empty($razorpay_order['amount'])) {
+        $start_payment_amount_paise = (int)($razorpay_order['amount']);
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -338,41 +406,6 @@ $default_payment_amount = 1; // rupees (demo)
             .btn { padding:10px 0; font-size:14px;}
         }
     </style>
-    <script>
-    function updateAgeGroup() {
-        const dobEl = document.getElementById('dob');
-        const dob = dobEl.value;
-        const today = new Date();
-        if (!dob) return;
-        const birthDate = new Date(dob);
-        let age = today.getFullYear() - birthDate.getFullYear();
-        const m = today.getMonth() - birthDate.getMonth();
-        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-            age--;
-        }
-        let group = '';
-        if (age >= 30 && age <= 40) group = '30 to 40';
-        else if (age >= 41 && age <= 45) group = '41 to 45';
-        else if (age >= 46 && age <= 50) group = '46 to 50';
-        else if (age >= 51 && age <= 55) group = '51 to 55';
-        else if (age > 55) group = 'Above 55';
-        document.getElementById('age_group').value = group;
-    }
-
-    // Save & Pay button: set hidden start_payment flag then submit form
-    function onSaveAndPayClick(btn) {
-        btn.disabled = true;
-        btn.innerText = 'Saving...';
-        const form = document.getElementById('profileForm');
-        document.getElementById('start_payment').value = '1';
-        // Ensure amount field exists; if empty, set demo default (1 INR)
-        const amt = document.getElementById('payment_amount');
-        if (!amt || !amt.value) {
-            document.getElementById('payment_amount').value = '<?php echo h($default_payment_amount); ?>';
-        }
-        form.submit();
-    }
-    </script>
 </head>
 <body>
 <div class="wrap">
@@ -385,12 +418,17 @@ $default_payment_amount = 1; // rupees (demo)
         </div>
         <h1>Player Registration / Profile</h1>
         <div class="sub">Fill your details for the Latur Badminton League registration</div>
-        <?php if($msg_success): ?><div class="msg success"><?php echo h($msg_success);?></div><?php endif;?>
+
+        <?php if(!empty($_SESSION['flash_msg_success'])): ?>
+            <div class="msg success"><?php echo h($_SESSION['flash_msg_success']); unset($_SESSION['flash_msg_success']); ?></div>
+        <?php endif; ?>
         <?php if($msg_error): ?><div class="msg error"><?php echo h($msg_error);?></div><?php endif;?>
+        <?php if($msg_success && empty($_SESSION['flash_msg_success'])): ?><div class="msg success"><?php echo h($msg_success);?></div><?php endif;?>
+
         <form id="profileForm" method="post" enctype="multipart/form-data" autocomplete="off" style="text-align:left;">
             <input type="hidden" name="csrf" value="<?php echo h($csrf); ?>">
             <!-- Hidden controls for payment flow -->
-            <input type="hidden" name="start_payment" id="start_payment" value="0">
+            <input type="hidden" name="start_payment" id="start_payment" value="1"> <!-- always start payment after Save & Pay click (single action) -->
             <input type="hidden" name="payment_amount" id="payment_amount" value="<?php echo h($default_payment_amount); ?>">
 
             <div class="row">
@@ -405,7 +443,7 @@ $default_payment_amount = 1; // rupees (demo)
 
             <div class="row">
                 <label for="dob">Date of Birth</label>
-                <input required type="date" name="dob" id="dob" onchange="updateAgeGroup()" min="<?php echo h($min_dob); ?>" max="<?php echo h($max_dob); ?>" value="<?php echo h($player['dob'] ?? ''); ?>">
+                <input required type="date" name="dob" id="dob" onchange="(function(){const e=document.getElementById('dob');const d=new Date(e.value);if(!isNaN(d))document.getElementById('age_group').value=(function(age){if(age>=30&&age<=40)return'30 to 40';if(age>=41&&age<=45)return'41 to 45';if(age>=46&&age<=50)return'46 to 50';if(age>=51&&age<=55)return'51 to 55';if(age>55)return'Above 55';return'';})(new Date().getFullYear()-d.getFullYear()-((new Date().getMonth()<d.getMonth()|| (new Date().getMonth()===d.getMonth() && new Date().getDate()<d.getDate()))?1:0));})()" min="<?php echo h($min_dob); ?>" max="<?php echo h($max_dob); ?>" value="<?php echo h($player['dob'] ?? ''); ?>">
             </div>
             <div class="row">
                 <label for="age_group">Age Group</label>
@@ -417,7 +455,6 @@ $default_payment_amount = 1; // rupees (demo)
                 </select>
             </div>
 
-            <!-- Aadhaar moved below Age Group as requested -->
             <div class="row">
                 <label for="aadhaar">Aadhaar Number</label>
                 <input required type="text" name="aadhaar" id="aadhaar" maxlength="12" pattern="\d{12}" value="<?php echo h($player['aadhaar'] ?? ''); ?>">
@@ -477,37 +514,100 @@ $default_payment_amount = 1; // rupees (demo)
                 <label for="terms">I confirm all information is correct and accept all terms and conditions.</label>
             </div>
 
-            <!-- Primary action: only Save & Pay (no separate Save Profile button) -->
-            <button class="btn secondary" type="button" id="savePayBtn" onclick="onSaveAndPayClick(this)">Save &amp; Pay (₹1 Demo)</button>
+            <!-- Single action button that saves profile and triggers payment server-side -->
+            <button class="btn secondary" type="submit" id="savePayBtn">Save &amp; Pay (₹<?php echo h($default_payment_amount); ?> Demo)</button>
         </form>
     </div>
 </div>
 
-<!-- Include Razorpay client helper -->
-<script src="../assets/js/razorpay_checkout.js"></script>
+<!-- Include Razorpay Checkout.js (client) -->
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 
-<?php if ($should_start_payment): ?>
 <script>
+/*
+ Client behavior:
+ - If server created an order during POST, PHP sets JS vars below and we immediately open Checkout.
+ - The handler sends the razorpay response to /userpanel/razorpay_callback.php via POST (JSON or form) so server verifies signature.
+*/
 (function(){
-    // Initialize RazorpayCheckout with public key from server config
-    if (typeof RazorpayCheckout === 'undefined') {
-        console.error('RazorpayCheckout not loaded.');
-        return;
-    }
-    RazorpayCheckout.init({
-        keyId: '<?php echo h($razorpay_cfg['key_id'] ?? ''); ?>',
-        createOrderUrl: '/userpanel/razorpay_create_order.php',
-        callbackUrl: '/userpanel/razorpay_callback.php',
-        prefill: { contact: '<?php echo h($player['mobile'] ?? $phone); ?>' },
-        theme: { color: '#2563eb' }
-    });
+    const createdOrderId = <?php echo json_encode($created_order_id); ?>;
+    const startAmountPaise = <?php echo json_encode((int)$start_payment_amount_paise); ?>;
+    const publicKey = <?php echo json_encode($razorpay_cfg['key_id'] ?? ''); ?>;
+    const prefillMobile = <?php echo json_encode($player['mobile'] ?? $phone); ?>;
+    const callbackEndpoint = '/userpanel/razorpay_callback.php';
 
-    // start payment with server-provided amount (paise)
-    const amountPaise = <?php echo (int)$start_payment_amount_paise; ?>;
-    RazorpayCheckout.createAndPay({ amount_paise: amountPaise, receipt_note: 'Player registration fee' });
+    function openRazorpay(orderId, amountPaise) {
+        if (!publicKey) {
+            console.error('Razorpay public key not configured.');
+            alert('Payment cannot start: missing configuration.');
+            return;
+        }
+        const options = {
+            key: publicKey,
+            amount: amountPaise,
+            currency: 'INR',
+            name: 'Latur Badminton League',
+            description: 'Player registration fee',
+            order_id: orderId,
+            prefill: { contact: prefillMobile },
+            theme: { color: '#2563eb' },
+            handler: function (response) {
+                // Send payment details to server for verification & finalization
+                const payload = new FormData();
+                payload.append('razorpay_payment_id', response.razorpay_payment_id || '');
+                payload.append('razorpay_order_id', response.razorpay_order_id || '');
+                payload.append('razorpay_signature', response.razorpay_signature || '');
+                // include CSRF for server (if required)
+                payload.append('csrf', '<?php echo h($csrf); ?>');
+
+                fetch(callbackEndpoint, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    body: payload,
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                }).then(function(res){ return res.json(); })
+                .then(function(data){
+                    if (data && data.success) {
+                        // redirect to success page if provided else reload profile
+                        if (data.redirect) {
+                            window.location.href = data.redirect;
+                        } else {
+                            alert('Payment successful.');
+                            window.location.reload();
+                        }
+                    } else {
+                        console.error('Payment verification failed', data);
+                        alert('Payment verification failed. Please contact support.');
+                        // optional redirect if provided
+                        if (data && data.redirect) window.location.href = data.redirect;
+                    }
+                }).catch(function(err){
+                    console.error('Error while verifying payment:', err);
+                    alert('Payment was made but server verification failed. Contact support.');
+                });
+            },
+            modal: {
+                ondismiss: function() {
+                    // user closed the checkout
+                    console.info('Razorpay checkout dismissed by user.');
+                    // reload or show message
+                }
+            }
+        };
+        const rzp = new Razorpay(options);
+        rzp.open();
+    }
+
+    // If an order was created server-side, open checkout automatically
+    if (createdOrderId && startAmountPaise > 0) {
+        // open after small timeout to ensure UI updated
+        setTimeout(function(){
+            openRazorpay(createdOrderId, startAmountPaise);
+        }, 300);
+    }
 })();
 </script>
-<?php endif; ?>
-
 </body>
 </html>

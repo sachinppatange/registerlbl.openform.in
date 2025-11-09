@@ -1,0 +1,277 @@
+
+
+data:
+- config/app_config.php
+- config/wa_config.php
+- config/player_config.php
+
+- adminpanel/admin_auth.php
+- adminpanel/admin_dashboard.php
+- adminpanel/admin_login.php
+- adminpanel/admin_logout.php
+- adminpanel/whatsapp.php
+- adminpanel/user_repository.php
+- adminpanel/player_repository.php         # Player CRUD, status, fetch/update logic
+- adminpanel/player_dashboard.php          # Admin UI: list, edit, accept/reject, export
+- adminpanel/player_edit.php               # Admin: edit/update player info form
+- adminpanel/player_view.php
+- adminpanel/player_status.php             # Admin: accept/reject action endpoint
+- adminpanel/player_export_excel.php       # Admin: export player list to Excel
+- adminpanel/player_export_pdf.php         # Admin: export player list to PDF
+- adminpanel/storage/logs/whatsapp.log
+
+- userpanel/auth.php
+- userpanel/dashboard.php
+- userpanel/login.php
+- userpanel/logout.php
+- userpanel/signup.php
+- userpanel/whatsapp.php
+- userpanel/player_repository.php
+- userpanel/user_repository.php
+- userpanel/player_profile.php
+- userpanel/dashboard.php
+- userpanel/storage/logs/whatsapp.log
+
+- public/index.php
+- public/assets/
+
+- README.md
+
+
+
+
+
+
+
+
+
+
+
+| फाईल नाव                          | जुन्या/नवीन | काम/फंक्शन                                                         |
+|------------------------------------|-------------|---------------------------------------------------------------------|
+| config/app_config.php              | जुन्या      | अ‍ॅपचे बेसिक/कॉमन config (API, OTP, debug, इ.)                     |
+| config/wa_config.php               | जुन्या      | डेटाबेस कनेक्शन, WhatsApp config                                    |
+| config/player_config.php           | नवीन       | खेळाडू व ऑक्शनसाठी विशेष config (rules, limits, eligibility, इ.)     |
+
+| adminpanel/admin_auth.php          | जुन्या      | admin session/authentication helper                                  |
+| adminpanel/admin_dashboard.php     | जुन्या      | admin home/dashboard (सर्व summary)                                  |
+| adminpanel/admin_login.php         | जुन्या      | admin login (WhatsApp OTP)                                           |
+| adminpanel/admin_logout.php        | जुन्या      | admin logout session destroy                                         |
+| adminpanel/whatsapp.php            | जुन्या      | WhatsApp OTP helper                                                  |
+| adminpanel/user_repository.php     | जुन्या      | users साठी CRUD, DB helper                                           |
+
+| adminpanel/player_repository.php   | नवीन       | खेळाडूंची CRUD, fetch, update, status manage (DB)                   |
+| adminpanel/auction_repository.php  | नवीन       | auction नोंदणी/मॅनेजमेंटसाठी CRUD व DB logic                        |
+| adminpanel/auction_dashboard.php   | नवीन       | admin साठी auction लिस्ट/status management UI                        |
+| adminpanel/player_dashboard.php    | नवीन       | admin साठी खेळाडू लिस्ट, status, edit, accept/reject, export UI      |
+| adminpanel/player_edit.php         | नवीन       | admin साठी खेळाडू edit/update form                                   |
+| adminpanel/player_status.php       | नवीन       | admin साठी accept/reject action endpoint (status बदल)                |
+| adminpanel/player_export_excel.php | नवीन       | admin साठी खेळाडू लिस्ट Excel मध्ये export                           |
+| adminpanel/player_export_pdf.php   | नवीन       | admin साठी खेळाडू लिस्ट PDF मध्ये export                             |
+
+| adminpanel/storage/logs/whatsapp.log | जुन्या   | WhatsApp activity/debug log                                          |
+
+| userpanel/auth.php                 | जुन्या      | user session/authentication helper                                   |
+| userpanel/dashboard.php            | जुन्या      | user साठी मुख्य डॅशबोर्ड                                             |
+| userpanel/login.php                | जुन्या      | user login (WhatsApp OTP)                                            |
+| userpanel/logout.php               | जुन्या      | user logout session destroy                                          |
+| userpanel/signup.php               | जुन्या      | user registration (WhatsApp OTP)                                     |
+| userpanel/whatsapp.php             | जुन्या      | WhatsApp OTP helper                                                  |
+| userpanel/user_repository.php      | जुन्या      | user DB helper, profile CRUD                                         |
+
+| userpanel/player_profile.php       | नवीन       | खेळाडू नोंदणी + प्रोफाइल एडिट (form, फाईल upload, age group logic)  |
+| userpanel/player_dashboard.php     | नवीन       | खेळाडू साठी self-dashboard, status, registration info                |
+
+| userpanel/storage/logs/whatsapp.log | जुन्या   | userpanel साठी WhatsApp activity/debug log                           |
+
+| public/index.php                   | जुन्या      | अ‍ॅपचे entry point (landing, redirect)                               |
+| public/assets/                     | जुन्या      | static files (CSS/JS/images/fonts etc.)                              |
+
+| README.md                          | जुन्या      | प्रोजेक्टचे माहिती/डॉक्युमेंटेशन                                     |
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+data:
+- config/app_config.php
+- config/wa_config.php
+- config/player_config.php
+
+- adminpanel/admin_auth.php
+- adminpanel/admin_dashboard.php
+- adminpanel/admin_login.php
+- adminpanel/admin_logout.php
+- adminpanel/whatsapp.php
+- adminpanel/user_repository.php
+- adminpanel/player_repository.php
+- adminpanel/player_dashboard.php
+- adminpanel/player_edit.php
+- adminpanel/player_view.php
+- adminpanel/player_status.php
+- adminpanel/player_export_excel.php
+- adminpanel/player_export_pdf.php
+- adminpanel/storage/logs/whatsapp.log
+
+- userpanel/auth.php
+- userpanel/dashboard.php
+- userpanel/login.php
+- userpanel/logout.php
+- userpanel/signup.php
+- userpanel/whatsapp.php
+- userpanel/player_repository.php
+- userpanel/user_repository.php
+- userpanel/player_profile.php
+- userpanel/dashboard.php
+- userpanel/storage/logs/whatsapp.log
+
+- public/index.php
+- public/assets/
+
+- README.md
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Proposed file structure (only file names + short responsibility notes)
+# Keep existing files as-is. Add the following files/modules to implement:
+#  - Aadhaar OTP request & verify flow
+#  - fetch Aadhaar-demographic data (via Aadhaar/eKYC provider)
+#  - store Aadhaar data in players table and proceed to payment
+
+config/
+  aadhaar_config.php            # (new) credentials, endpoints, timeouts, mode (sandbox/prod)
+  app_config.php                # (existing)
+  wa_config.php                 # (existing)
+  player_config.php             # (existing)
+
+libs/
+  AadhaarClient.php             # (new) small wrapper to call Aadhaar/ekyc provider (requestOTP, verifyOTP, fetchData)
+  PaymentClient.php             # (optional/new) wrapper to call payment gateway (initiate, callback verify)
+
+migrations/
+  2025_11_04_add_aadhaar_columns.sql  # (new) SQL migration: add columns to players table:
+                                      #   aadhaar_verified (bool), aadhaar_txn_id (varchar),
+                                      #   aadhaar_data (json/text), aadhaar_verified_at (datetime)
+
+userpanel/
+  aadhaar/
+    request_otp.php             # (new) API endpoint (POST) — takes aadhaar number or mobile, requests OTP; returns txn id
+    verify_otp.php              # (new) API endpoint (POST) — takes txn id + otp; verifies and stores aadhaar data in session
+    fetch_aadhaar_data.php      # (new) internal endpoint (server) to fetch demographic data (if separate step)
+    consent_view.php            # (new) partial/HTML for Aadhaar consent modal/checkbox (UI)
+  js/
+    aadhaar.js                  # (new) frontend JS: open modal, call request_otp, call verify_otp, show progress/errors
+  player_profile.php            # (existing) (update to call Aadhaar flow before saving) — no new file, integration here
+  signup.php                    # (existing) (update to optionally include Aadhaar verification in flow)
+  player_repository.php         # (existing) (will be extended to save aadhaar fields — DB changes handled by migration)
+  payment/
+    initiate_payment.php        # (new) server-side: prepare payment data (after Aadhaar verified + form fields saved)
+    payment_return.php          # (new) payment gateway return/callback handler
+
+adminpanel/
+  aadhaar/
+    settings.php                # (new) UI to configure Aadhaar/provider credentials (uses config/aadhaar_config.php)
+    logs.php                    # (new) view logs of Aadhaar verifications (reads from players.aadhaar_data or separate log table)
+  player_dashboard.php          # (existing) (no structural rename) — will display aadhaar status/counts (update only)
+  player_view.php               # (existing) (no structural rename) — show aadhaar data link if available
+  player_repository.php         # (existing) (extend to allow admin override of aadhaar_verified and aadhaar_data)
+  player_export_csv.php         # (optional new) export columns include aadhaar_verified/aadhaar_data
+
+public/
+  assets/
+    aadhaar/                    # (optional) static icons, sample instructions images
+  index.php                     # (existing)
+
+api/
+  webhook/
+    aadhaar_callback.php        # (new/optional) callback endpoint if provider uses asynchronous notifications
+
+storage/
+  aadhaar/                      # (optional) if storing any received files (e.g., image of Aadhaar) — recommended to avoid storing raw image unless required
+  logs/
+    aadhaar.log                 # (new) log file for Aadhaar API calls (errors/summaries)
+
+docs/
+  aadhaar_flow.md               # (new) short doc: flow diagram, endpoints, expected statuses, DB columns, security notes
+
+README.md                       # (existing) update to document new Aadhaar flow & env vars
+
+# Quick responsibilities summary:
+# - config/aadhaar_config.php: put provider URLs, API key/secret, certificate paths, sandbox flag.
+# - libs/AadhaarClient.php: centralize request/response, retry, logging, signature/crypto if needed.
+# - userpanel/aadhaar/request_otp.php, verify_otp.php: endpoints called by front-end (aadhaar.js).
+# - aadhaar.js: manages UI/UX (modal, OTP timer, errors) and sequential AJAX calls.
+# - migrations/2025_11_04_add_aadhaar_columns.sql: alter players table to store verification and raw data safely.
+# - After successful verify_otp: save aadhaar_verified=1, aadhaar_txn_id, aadhaar_data (JSON) into players row,
+#   then redirect to userpanel/payment/initiate_payment.php which will create payment and forward user to gateway.
+# - adminpanel/aadhaar/logs.php and settings.php: small admin UIs to review verifications and change credentials.
+#
+# Security & privacy notes (implementation, not files):
+# - Store only minimum required Aadhaar fields (avoid storing PII where not needed). Use encrypted columns or database-level encryption for aadhaar number and aadhaar_data.
+# - Log only request IDs and non-sensitive statuses; never log full OTP values.
+# - Use HTTPS everywhere; protect server-to-server credentials; restrict access to admin routes.
+#
+# This file structure is intentionally minimal: it adds a dedicated aadhaar subflow (userpanel/aadhaar),
+# a small library (libs/AadhaarClient.php), a migration, and a couple of payment endpoints.
+# You can implement the front-end integration (aadhaar.js + consent_view.php) inside existing signup/player_profile forms
+# so the user can choose to "Verify using Aadhaar" and then continue to complete remaining fields and payment.
+
+
+
+----
+----
+-----
+
+# Pages (PHP) that need updates after the profile field & UI changes
+# Follow your repo file-structure
+
+config/
+  - (none - config files usually unchanged for fields)
+
+adminpanel/
+  - adminpanel/admin_dashboard.php
+  - adminpanel/player_dashboard.php
+  - adminpanel/player_view.php
+  - adminpanel/player_edit.php
+  - adminpanel/player_repository.php
+  - adminpanel/player_status.php
+  - adminpanel/player_export_excel.php
+  - adminpanel/player_export_pdf.php
+  - adminpanel/whatsapp.php        # if message templates include profile fields
+
+userpanel/
+  - userpanel/player_profile.php
+  - userpanel/signup.php
+  - userpanel/player_repository.php
+  - userpanel/whatsapp.php        # if message templates include profile fields
+  - userpanel/dashboard.php       # if dashboard shows profile summary
+
+public/
+  - public/index.php              # if public pages reference new fields or links
+
+root/
+  - README.md                     # update docs/notes (not mandatory for runtime)

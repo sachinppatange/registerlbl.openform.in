@@ -2,36 +2,31 @@
 session_start();
 require_once __DIR__ . '/../userpanel/auth.php';
 require_once __DIR__ . '/player_repository.php';
-$razorpay_cfg = [];
-$config_path = __DIR__ . '/../config/razorpay_config.php';
-if (file_exists($config_path)) $razorpay_cfg = require $config_path;
+require_once __DIR__ . '/../config/player_config.php';
 
-// Authentication
+// Authentication: Only logged-in users can fill/edit profile
 require_auth();
 $phone = current_user();
 
-// CSRF
+// CSRF Protection
 if (empty($_SESSION['csrf'])) $_SESSION['csrf'] = bin2hex(random_bytes(16));
 $csrf = $_SESSION['csrf'];
 
-// Messages/state
 $msg_error = '';
 $msg_success = '';
-$created_order = null;
-$should_start_payment = false;
-$start_payment_amount_paise = 0;
 
-// Load existing player
+// Load existing player profile if available
 $player = player_get_by_phone($phone) ?? ['mobile' => $phone];
 
-// Ensure upload folders & logs
-@mkdir(__DIR__ . '/storage/uploads/aadhaar', 0755, true);
-@mkdir(__DIR__ . '/storage/uploads/photos', 0755, true);
-@mkdir(__DIR__ . '/storage/logs', 0755, true);
+// Directory paths
+$aadhaarDir = __DIR__ . '/storage/uploads/aadhaar';
+$photoDir   = __DIR__ . '/storage/uploads/photos';
 
-function h($v){ return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
-function rp_log($m){ @file_put_contents(__DIR__.'/storage/logs/razorpay_debug.log', date('c').' '.$m.PHP_EOL, FILE_APPEND|LOCK_EX); }
+// Ensure upload folders exist
+if (!is_dir($aadhaarDir)) mkdir($aadhaarDir, 0777, true);
+if (!is_dir($photoDir)) mkdir($photoDir, 0777, true);
 
+// Helper: compute age group from dob (server-side)
 function compute_age_group_from_dob(?string $dob): string {
     if (empty($dob)) return '';
     $birth = strtotime($dob);
@@ -39,7 +34,9 @@ function compute_age_group_from_dob(?string $dob): string {
     $today = time();
     $age = (int)date('Y', $today) - (int)date('Y', $birth);
     $m = (int)date('n', $today) - (int)date('n', $birth);
-    if ($m < 0 || ($m === 0 && (int)date('j', $today) < (int)date('j', $birth))) $age--;
+    if ($m < 0 || ($m === 0 && (int)date('j', $today) < (int)date('j', $birth))) {
+        $age--;
+    }
     if ($age >= 30 && $age <= 40) return '30 to 40';
     if ($age >= 41 && $age <= 45) return '41 to 45';
     if ($age >= 46 && $age <= 50) return '46 to 50';
@@ -48,179 +45,219 @@ function compute_age_group_from_dob(?string $dob): string {
     return '';
 }
 
-// DOB constraints
-$max_dob = '1995-11-01';
-$min_dob = '1945-01-01';
-
-// Check if payment requested
-$start_payment_requested = (isset($_POST['start_payment']) && trim($_POST['start_payment']) === '1');
+// Constraint: disallow DOB after 1995-11-01
+$max_dob = '1995-11-01'; // 1 Nov 1995
+$min_dob = '1945-01-01'; // optional lower bound
 
 // Handle form submit
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && hash_equals($csrf, $_POST['csrf'] ?? '')) {
 
-    // Required fields
+    // Basic required fields to validate (server-side)
     $required_fields = [
-        'full_name','dob','village','court','play_time','blood_group','playing_years','mobile','aadhaar'
+        'full_name',
+        'dob',
+        'village',
+        'court',
+        'play_time',
+        'blood_group',
+        'playing_years',
+        'mobile',
+        'aadhaar',
     ];
+
     $missing = [];
     foreach ($required_fields as $rf) {
-        if (trim($_POST[$rf] ?? '') === '') $missing[] = $rf;
-    }
-
-    // DOB check
-    $dob_input = trim($_POST['dob'] ?? '');
-    if ($dob_input) {
-        $dob_ts = strtotime($dob_input);
-        if ($dob_ts === false || $dob_ts < strtotime($min_dob) || $dob_ts > strtotime($max_dob)) {
-            $missing[] = 'dob';
-            $msg_error = "Please select a valid Date of Birth between {$min_dob} and {$max_dob}.";
+        if (trim($_POST[$rf] ?? '') === '') {
+            $missing[] = $rf;
         }
     }
 
-    // Age group compute
-    $computed_age_group = compute_age_group_from_dob($dob_input);
-    if ($computed_age_group === '' && trim($_POST['age_group'] ?? '') === '') $missing[] = 'age_group';
+    // Server-side DOB check: must be on or before $max_dob
+    $dob_input = trim($_POST['dob'] ?? '');
+    if ($dob_input) {
+        $dob_ts = strtotime($dob_input);
+        $min_ts = strtotime($min_dob);
+        $max_ts = strtotime($max_dob);
+        if ($dob_ts === false || $dob_ts < $min_ts || $dob_ts > $max_ts) {
+            $missing[] = 'dob';
+            $msg_error = "Please select a valid Date of Birth between {$min_dob} and {$max_dob}. Dates after {$max_dob} are not allowed.";
+        }
+    }
 
-    // Files required if not in DB
-    if (empty($player['aadhaar_card']) && (empty($_FILES['aadhaar_card']['name']) || $_FILES['aadhaar_card']['error'] !== 0)) $missing[] = 'aadhaar_card';
-    if (empty($player['photo']) && (empty($_FILES['photo']['name']) || $_FILES['photo']['error'] !== 0)) $missing[] = 'photo';
+    // Age group must be derived from dob (ensure server computes it)
+    $computed_age_group = compute_age_group_from_dob(trim($_POST['dob'] ?? ''));
+    if ($computed_age_group === '') {
+        // If no valid age group, consider age_group missing
+        if (trim($_POST['age_group'] ?? '') === '') {
+            $missing[] = 'age_group';
+        }
+    }
+
+    // For files: if user already has uploaded file (in DB) it's acceptable; otherwise require upload
+    if (empty($player['aadhaar_card']) && (empty($_FILES['aadhaar_card']['name']) || $_FILES['aadhaar_card']['error'] !== 0)) {
+        $missing[] = 'aadhaar_card';
+    }
+    if (empty($player['photo']) && (empty($_FILES['photo']['name']) || $_FILES['photo']['error'] !== 0)) {
+        $missing[] = 'photo';
+    }
 
     if (!empty($missing) && empty($msg_error)) {
+        // Friendly labels mapping
         $labels = [
-            'full_name'=>'Full name','dob'=>'Date of birth','age_group'=>'Age group','village'=>'Village/City',
-            'court'=>'Court','play_time'=>'Playing time','blood_group'=>'Blood group','playing_years'=>'Playing years',
-            'mobile'=>'Mobile','aadhaar'=>'Aadhaar number','aadhaar_card'=>'Aadhaar card','photo'=>'Photo'
+            'full_name' => 'Full name',
+            'dob' => 'Date of birth',
+            'age_group' => 'Age group (auto-calculated from DOB)',
+            'village' => 'Village/City',
+            'court' => 'Court',
+            'play_time' => 'Playing time',
+            'blood_group' => 'Blood group',
+            'playing_years' => 'Playing years',
+            'mobile' => 'Mobile',
+            'aadhaar' => 'Aadhaar number',
+            'aadhaar_card' => 'Aadhaar card upload',
+            'photo' => 'Photo upload',
         ];
-        $miss = array_map(fn($k)=>$labels[$k] ?? $k, $missing);
-        $msg_error = 'Please fill/attach required fields: ' . implode(', ', $miss) . '.';
-    } else {
-        // Prepare data
+        $missing_labels = array_map(function($k) use ($labels) { return $labels[$k] ?? $k; }, $missing);
+        $msg_error = 'Please fill/attach required fields: ' . implode(', ', $missing_labels) . '.';
+    } elseif (empty($missing) && empty($msg_error)) {
+        // All required present — prepare data (exclude file paths for initial save)
         $data = [
-            'full_name' => trim($_POST['full_name'] ?? ''),
-            'dob' => $dob_input,
-            'age_group' => $computed_age_group ?: trim($_POST['age_group'] ?? ''),
-            'village' => trim($_POST['village'] ?? ''),
-            'court' => trim($_POST['court'] ?? ''),
-            'play_time' => trim($_POST['play_time'] ?? ''),
-            'blood_group' => trim($_POST['blood_group'] ?? ''),
-            'playing_years' => trim($_POST['playing_years'] ?? ''),
-            'mobile' => trim($_POST['mobile'] ?? ''),
-            'aadhaar' => trim($_POST['aadhaar'] ?? ''),
-            'terms' => 1,
+            'full_name'      => trim($_POST['full_name'] ?? ''),
+            'dob'            => trim($_POST['dob'] ?? ''),
+            'age_group'      => $computed_age_group ?: trim($_POST['age_group'] ?? ''),
+            'village'        => trim($_POST['village'] ?? ''),
+            'court'          => trim($_POST['court'] ?? ''),
+            'play_time'      => trim($_POST['play_time'] ?? ''),
+            'blood_group'    => trim($_POST['blood_group'] ?? ''),
+            'playing_years'  => trim($_POST['playing_years'] ?? ''),
+            'mobile'         => trim($_POST['mobile'] ?? ''),
+            'aadhaar'        => trim($_POST['aadhaar'] ?? ''),
+            'terms'          => 1, // Always set to 1, auto-selected
         ];
 
-        // Save basic data
+        // STEP 1: Save/update basic data first (without file paths) to ensure we have an ID
         $saved = player_save_or_update($phone, $data);
         if (!$saved) {
             $msg_error = "Failed to save player profile.";
         } else {
-            // Refresh
+            // Refresh player to get ID
             $player = player_get_by_phone($phone) ?? $player;
             $player_id = $player['id'] ?? null;
 
-            // Uploads
+            // Prepare file paths using player ID (if available)
             $aadhaar_card_path = $player['aadhaar_card'] ?? '';
             $photo_path = $player['photo'] ?? '';
 
+            // File upload logic: use player ID in filename (overwrite if exists)
             if (!empty($_FILES['aadhaar_card']['name']) && $_FILES['aadhaar_card']['error'] === 0) {
                 $ext = strtolower(pathinfo($_FILES['aadhaar_card']['name'], PATHINFO_EXTENSION));
                 if (in_array($ext, PLAYER_AADHAAR_ALLOWED_EXT)) {
-                    $filename = $player_id ? "aadhaar_{$player_id}.{$ext}" : "aadhaar_".time().".{$ext}";
-                    $abs = __DIR__ . "/storage/uploads/aadhaar/{$filename}";
-                    if (@move_uploaded_file($_FILES['aadhaar_card']['tmp_name'], $abs)) {
-                        $aadhaar_card_path = 'userpanel/storage/uploads/aadhaar/' . $filename;
-                    } else $msg_error = "Failed to upload Aadhaar card file.";
-                } else $msg_error = "Invalid Aadhaar card file type.";
+                    // Build filename using ID (keep extension)
+                    if ($player_id) {
+                        $filename = "aadhaar_" . $player_id . "." . $ext;
+                    } else {
+                        // Fallback if no id (shouldn't happen) — timestamp
+                        $filename = "aadhaar_" . time() . "." . $ext;
+                    }
+                    $target = "storage/uploads/aadhaar/" . $filename;
+                    $absTarget = __DIR__ . '/' . $target;
+                    // If a previous file exists, try unlink (ignore failure)
+                    if (!empty($aadhaar_card_path) && file_exists(__DIR__ . '/' . $aadhaar_card_path)) {
+                        @unlink(__DIR__ . '/' . $aadhaar_card_path);
+                    }
+                    if (move_uploaded_file($_FILES['aadhaar_card']['tmp_name'], $absTarget)) {
+                        $aadhaar_card_path = $target;
+                    } else {
+                        $msg_error = "Failed to upload Aadhaar card file.";
+                    }
+                } else {
+                    $msg_error = "Invalid Aadhaar card file type.";
+                }
             }
 
             if (!empty($_FILES['photo']['name']) && $_FILES['photo']['error'] === 0) {
                 $ext = strtolower(pathinfo($_FILES['photo']['name'], PATHINFO_EXTENSION));
                 if (in_array($ext, PLAYER_PHOTO_ALLOWED_EXT)) {
-                    $filename = $player_id ? "photo_{$player_id}.{$ext}" : "photo_".time().".{$ext}";
-                    $abs = __DIR__ . "/storage/uploads/photos/{$filename}";
-                    if (@move_uploaded_file($_FILES['photo']['tmp_name'], $abs)) {
-                        $photo_path = 'userpanel/storage/uploads/photos/' . $filename;
-                    } else $msg_error = "Failed to upload Photo file.";
-                } else $msg_error = "Invalid Photo file type.";
-            }
-
-            // Update DB with file paths if changed
-            $files_update = [];
-            if ($aadhaar_card_path !== ($player['aadhaar_card'] ?? '')) $files_update['aadhaar_card'] = $aadhaar_card_path;
-            if ($photo_path !== ($player['photo'] ?? '')) $files_update['photo'] = $photo_path;
-            if (!empty($files_update)) {
-                if (!player_save_or_update($phone, array_merge($data, $files_update))) {
-                    rp_log("Failed to update file paths for {$phone}");
+                    if ($player_id) {
+                        $filename = "photo_" . $player_id . "." . $ext;
+                    } else {
+                        $filename = "photo_" . time() . "." . $ext;
+                    }
+                    $target = "storage/uploads/photos/" . $filename;
+                    $absTarget = __DIR__ . '/' . $target;
+                    if (!empty($photo_path) && file_exists(__DIR__ . '/' . $photo_path)) {
+                        @unlink(__DIR__ . '/' . $photo_path);
+                    }
+                    if (move_uploaded_file($_FILES['photo']['tmp_name'], $absTarget)) {
+                        $photo_path = $target;
+                    } else {
+                        $msg_error = "Failed to upload Photo file.";
+                    }
                 } else {
-                    $player = player_get_by_phone($phone) ?? $player;
+                    $msg_error = "Invalid Photo file type.";
                 }
             }
 
-            if (empty($msg_error)) $msg_success = "Player profile saved successfully!";
-        }
-    }
+            // STEP 2: Update DB with file paths (if any changes)
+            $data_files = [];
+            if ($aadhaar_card_path !== ($player['aadhaar_card'] ?? '')) $data_files['aadhaar_card'] = $aadhaar_card_path;
+            if ($photo_path !== ($player['photo'] ?? '')) $data_files['photo'] = $photo_path;
 
-    // If user requested payment, create Razorpay order for ₹1 (100 paise)
-    if ($start_payment_requested && empty($msg_error) && !empty($msg_success)) {
-        $amount_paise = 100; // ₹1
-        $keyId = trim($razorpay_cfg['key_id'] ?? '');
-        $keySecret = trim($razorpay_cfg['key_secret'] ?? '');
-        if (empty($keyId) || empty($keySecret)) {
-            $msg_error = 'Payment configuration missing. Contact admin.';
-            rp_log('Missing Razorpay keys in config.');
-        } else {
-            $receipt = 'player_' . ($player['id'] ?? 'na') . '_' . time();
-            $payload = json_encode(['amount' => $amount_paise, 'currency' => 'INR', 'receipt' => $receipt, 'payment_capture' => 1]);
-
-            $ch = curl_init('https://api.razorpay.com/v1/orders');
-            curl_setopt($ch, CURLOPT_USERPWD, $keyId . ':' . $keySecret);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 20);
-
-            $resp = curl_exec($ch);
-            $errno = curl_errno($ch);
-            $errstr = curl_error($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-
-            rp_log("CREATE_ORDER http={$httpCode} errno={$errno} errstr={$errstr} resp=" . substr((string)$resp,0,2000));
-            $json = json_decode($resp, true);
-
-            if ($errno || !is_array($json) || ($httpCode < 200 || $httpCode >= 300)) {
-                $msg_error = 'Failed to initiate payment. Try again later.';
-                rp_log('Razorpay order create failed: ' . substr((string)$resp,0,2000));
+            if (!empty($data_files)) {
+                // Merge into $data for update
+                $data_update = array_merge($data, $data_files);
+                if (!player_save_or_update($phone, $data_update)) {
+                    $msg_error = $msg_error ? $msg_error . ' Also failed to update file paths in DB.' : 'Failed to update file paths in DB.';
+                } else {
+                    // Success
+                    if (empty($msg_error)) {
+                        $msg_success = "Player profile saved successfully!";
+                        $player = player_get_by_phone($phone) ?? $player;
+                    }
+                }
             } else {
-                $created_order = $json;
-                $should_start_payment = true;
-                $start_payment_amount_paise = (int)($json['amount'] ?? $amount_paise);
-                if (function_exists('payment_create_local_order')) {
-                    payment_create_local_order([
-                        'order_id' => $created_order['id'] ?? null,
-                        'user_mobile' => $phone,
-                        'amount' => $start_payment_amount_paise,
-                        'currency' => 'INR',
-                        'status' => 'created',
-                        'meta' => json_encode(['player_id' => $player['id'] ?? null]),
-                    ]);
+                // No file changes; already saved basic data
+                if (empty($msg_error)) {
+                    $msg_success = "Player profile saved successfully!";
+                    $player = player_get_by_phone($phone) ?? $player;
                 }
             }
         }
     }
 }
 
-// Select options for form
-$age_groups = ['30 to 40','41 to 45','46 to 50','51 to 55','Above 55'];
-$blood_groups = ['A+','A-','B+','B-','AB+','AB-','O+','O-'];
+// Age Group options
+$age_groups = [
+    '30 to 40'    => '30 to 40',
+    '41 to 45'    => '41 to 45',
+    '46 to 50'    => '46 to 50',
+    '51 to 55'    => '51 to 55',
+    'Above 55'    => 'Above 55',
+];
+
+// Blood group options
+$blood_groups = [
+    'A+'  => 'A+',
+    'A-'  => 'A-',
+    'B+'  => 'B+',
+    'B-'  => 'B-',
+    'AB+' => 'AB+',
+    'AB-' => 'AB-',
+    'O+'  => 'O+',
+    'O-'  => 'O-',
+];
+
+// Playing years options: individual entries from 0 to 20, plus "More than 20 Years"
 $playing_years_options = [];
-for ($i=0;$i<=20;$i++) $playing_years_options[($i===1?'1 Year':$i.' Years')] = ($i===1?'1 Year':$i.' Years');
+for ($i = 0; $i <= 20; $i++) {
+    $label = ($i === 1) ? '1 Year' : $i . ' Years';
+    $playing_years_options[$label] = $label;
+}
 $playing_years_options['More than 20 Years'] = 'More than 20 Years';
 
-// Default display amount rupees
-$default_payment_amount = 1;
+// Helper for escaping output
+function h(?string $v): string { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -228,178 +265,162 @@ $default_payment_amount = 1;
     <meta charset="UTF-8">
     <title>Player Registration / Profile</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- Favicon as SVG logo -->
     <link rel="icon" type="image/svg+xml" href="../assets/lbllogo.svg">
     <style>
-        :root { --primary:#2563eb; --muted:#64748b; --border:#e2e8f0; }
-        body{background:#f8fafc;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;color:#0f172a;margin:0}
-        .wrap{display:grid;place-items:center;min-height:100vh;padding:12px}
-        .card{width:100%;max-width:430px;background:#fff;border-radius:13px;padding:28px 18px;box-shadow:0 4px 16px rgba(37,99,235,0.08)}
-        label{display:block;margin-top:12px;font-weight:500}
-        input,select{width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);margin-top:6px}
-        .btn{width:100%;padding:13px;border-radius:10px;border:0;background:var(--primary);color:#fff;font-weight:600;margin-top:14px;cursor:pointer}
-        .btn.secondary{background:#0ea5e9}
-        .msg{padding:10px;border-radius:8px;margin-bottom:12px}
-        .msg.success{background:#ecfdf5;color:#065f46}
-        .msg.error{background:#fff1f2;color:#7f1d1d}
+        :root { --primary:#2563eb; --secondary:#0ea5e9; --bg:#f8fafc; --card:#fff; --text:#0f172a; --muted:#64748b; --border:#e2e8f0;}
+        body { background:var(--bg); font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; color:var(--text); margin:0;}
+        .wrap { display:grid; place-items:center; min-height:100dvh; padding:12px;}
+        .card { width:100%; max-width:430px; background:var(--card); border-radius:13px; box-shadow:0 4px 16px #2563eb14; padding:28px 18px; text-align:center;}
+        .logo { width: 82px; height: 82px; margin:0 auto 10px auto; border-radius:50%; background:#fff; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 10px rgba(37,99,235,0.10); overflow:hidden; }
+        .logo img { width: 63px; height: 63px; }
+        .topbar { display:flex; justify-content:flex-start; align-items:center; margin-bottom:10px; }
+        .link { text-decoration:none; color:#fff; background:#0f172a; padding:8px 16px; border-radius:10px; font-size:15px; font-weight:600; margin-right:12px; }
+        h1 { font-size:22px; text-align:center; margin-bottom:8px; color:var(--primary);}
+        .sub { color:var(--muted); font-size:15px; margin-bottom:16px;}
+        label { font-weight:500; display:block; margin:12px 0 6px; text-align:left;}
+        input, select { width:100%; padding:10px; border-radius:10px; border:1px solid var(--border); font-size:15px; }
+        input[type="file"] { padding:0;}
+        .row { margin-bottom:14px;}
+        .btn { width:100%; background:var(--primary); color:#fff; border-radius:10px; padding:13px 0; font-size:16px; font-weight:600; border:0; cursor:pointer; margin-top:14px;}
+        .msg { margin-bottom:10px; padding:8px; border-radius:8px; font-size:14px;}
+        .msg.success { background:#e0fce0; color:#166534;}
+        .msg.error { background:#fee2e2; color:#7f1d1d;}
+        .terms { margin-top:12px; font-size:14px;}
+        .lock-select { background:#e2e8f0; pointer-events:none;}
+        .img-thumb { width:54px; height:54px; object-fit:cover; border-radius:9px; margin-bottom:6px; border:1px solid var(--border);}
+        @media (max-width:500px){
+            .card { max-width:100%; padding:12px 2px;}
+            .logo { width: 54px; height: 54px;}
+            .logo img { width: 35px; height: 35px;}
+            h1 { font-size:18px;}
+            .btn { padding:10px 0; font-size:14px;}
+        }
     </style>
+    <script>
+    function updateAgeGroup() {
+        const dobEl = document.getElementById('dob');
+        const dob = dobEl.value;
+        const today = new Date();
+        if (!dob) return;
+        const birthDate = new Date(dob);
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const m = today.getMonth() - birthDate.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+            age--;
+        }
+        let group = '';
+        if (age >= 30 && age <= 40) group = '30 to 40';
+        else if (age >= 41 && age <= 45) group = '41 to 45';
+        else if (age >= 46 && age <= 50) group = '46 to 50';
+        else if (age >= 51 && age <= 55) group = '51 to 55';
+        else if (age > 55) group = 'Above 55';
+        document.getElementById('age_group').value = group;
+    }
+    </script>
 </head>
 <body>
 <div class="wrap">
-  <div class="card">
-    <div style="text-align:center"><img src="../assets/lbllogo.svg" alt="LBL" style="width:64px;height:64px"></div>
-    <h2 style="text-align:center;color:var(--primary)">Player Registration / Profile</h2>
-    <p style="color:var(--muted);text-align:center">Fill details and pay registration fee (₹<?php echo h($default_payment_amount); ?>)</p>
+    <div class="card">
+        <div class="logo">
+            <img src="../assets/lbllogo.svg" alt="LBL Logo">
+        </div>
+        <div class="topbar">
+            <a class="link" href="dashboard.php">&larr; Back to Dashboard</a>
+        </div>
+        <h1>Player Registration / Profile</h1>
+        <div class="sub">Fill your details for the Latur Badminton League registration</div>
+        <?php if($msg_success): ?><div class="msg success"><?php echo h($msg_success);?></div><?php endif;?>
+        <?php if($msg_error): ?><div class="msg error"><?php echo h($msg_error);?></div><?php endif;?>
+        <form method="post" enctype="multipart/form-data" autocomplete="off" style="text-align:left;">
+            <input type="hidden" name="csrf" value="<?php echo h($csrf); ?>">
 
-    <?php if ($msg_success): ?><div class="msg success"><?php echo h($msg_success); ?></div><?php endif; ?>
-    <?php if ($msg_error): ?><div class="msg error"><?php echo h($msg_error); ?></div><?php endif; ?>
+            <div class="row">
+                <label for="full_name">Full Name</label>
+                <input required type="text" name="full_name" id="full_name" value="<?php echo h($player['full_name'] ?? ''); ?>">
+            </div>
 
-    <form id="profileForm" method="post" enctype="multipart/form-data" autocomplete="off" style="text-align:left;">
-      <input type="hidden" name="csrf" value="<?php echo h($csrf); ?>">
-      <input type="hidden" name="start_payment" id="start_payment" value="0">
-      <input type="hidden" name="payment_amount" id="payment_amount" value="<?php echo h($default_payment_amount); ?>">
+            <div class="row">
+                <label for="mobile">Mobile Number</label>
+                <input required type="text" name="mobile" id="mobile" value="<?php echo h($player['mobile'] ?? $phone); ?>" maxlength="12" pattern="\d{10,12}" readonly>
+            </div>
 
-      <label for="full_name">Full Name</label>
-      <input type="text" id="full_name" name="full_name" required value="<?php echo h($player['full_name'] ?? ''); ?>">
+            <div class="row">
+                <label for="dob">Date of Birth</label>
+                <input required type="date" name="dob" id="dob" onchange="updateAgeGroup()" min="1970-01-01" max="<?php echo date('Y-m-d'); ?>" value="<?php echo h($player['dob'] ?? ''); ?>">
+            </div>
+            <div class="row">
+                <label for="age_group">Age Group</label>
+                <select required name="age_group" id="age_group" readonly class="lock-select">
+                    <option value="">Select Age Group</option>
+                    <?php foreach ($age_groups as $val): ?>
+                        <option value="<?php echo h($val); ?>" <?php echo (($player['age_group'] ?? '') === $val) ? 'selected' : '';?>><?php echo h($val); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
 
-      <label for="mobile">Mobile Number</label>
-      <input type="text" id="mobile" name="mobile" readonly required value="<?php echo h($player['mobile'] ?? $phone); ?>">
+            <!-- Aadhaar moved below Age Group as requested -->
+            <div class="row">
+                <label for="aadhaar">Aadhaar Number</label>
+                <input required type="text" name="aadhaar" id="aadhaar" maxlength="12" pattern="\d{12}" value="<?php echo h($player['aadhaar'] ?? ''); ?>">
+            </div>
 
-      <label for="dob">Date of Birth</label>
-      <input type="date" id="dob" name="dob" onchange="(function(){const e=document.getElementById('dob');const d=new Date(e.value);if(!isNaN(d)) {let age=new Date().getFullYear()-d.getFullYear()-((new Date().getMonth()<d.getMonth()|| (new Date().getMonth()===d.getMonth() && new Date().getDate()<d.getDate()))?1:0);let g='';if(age>=30&&age<=40)g='30 to 40';else if(age>=41&&age<=45)g='41 to 45';else if(age>=46&&age<=50)g='46 to 50';else if(age>=51&&age<=55)g='51 to 55';else if(age>55)g='Above 55';document.getElementById('age_group').value=g;}})()" min="<?php echo h($min_dob); ?>" max="<?php echo h($max_dob); ?>" required value="<?php echo h($player['dob'] ?? ''); ?>">
+            <div class="row">
+                <label for="village">Village/City Name</label>
+                <input required type="text" name="village" id="village" value="<?php echo h($player['village'] ?? ''); ?>">
+            </div>
+            <div class="row">
+                <label for="court">Court Name</label>
+                <input required type="text" name="court" id="court" value="<?php echo h($player['court'] ?? ''); ?>">
+            </div>
+            <div class="row">
+                <label for="play_time">Playing Time</label>
+                <input required type="text" name="play_time" id="play_time" value="<?php echo h($player['play_time'] ?? ''); ?>">
+            </div>
 
-      <label for="age_group">Age Group</label>
-      <select id="age_group" name="age_group" readonly class="lock-select" required>
-        <option value="">Select Age Group</option>
-        <?php foreach ($age_groups as $g): ?>
-          <option value="<?php echo h($g); ?>" <?php echo (($player['age_group'] ?? '') === $g) ? 'selected' : ''; ?>><?php echo h($g); ?></option>
-        <?php endforeach; ?>
-      </select>
+            <!-- Blood Group -->
+            <div class="row">
+                <label for="blood_group">Blood Group</label>
+                <select required name="blood_group" id="blood_group">
+                    <option value="">Select Blood Group</option>
+                    <?php foreach ($blood_groups as $key => $label): ?>
+                        <option value="<?php echo h($key); ?>" <?php echo (($player['blood_group'] ?? '') === $key) ? 'selected' : '';?>><?php echo h($label); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
 
-      <label for="aadhaar">Aadhaar Number</label>
-      <input type="text" id="aadhaar" name="aadhaar" maxlength="12" pattern="\d{12}" required value="<?php echo h($player['aadhaar'] ?? ''); ?>">
+            <!-- Playing Years: 0 to 20 as separate options -->
+            <div class="row">
+                <label for="playing_years">From how many years have you been playing badminton?</label>
+                <select required name="playing_years" id="playing_years">
+                    <option value="">Select</option>
+                    <?php foreach ($playing_years_options as $key => $label): ?>
+                        <option value="<?php echo h($key); ?>" <?php echo (($player['playing_years'] ?? '') === $key) ? 'selected' : '';?>><?php echo h($label); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
 
-      <label for="village">Village / City</label>
-      <input type="text" id="village" name="village" required value="<?php echo h($player['village'] ?? ''); ?>">
-
-      <label for="court">Court</label>
-      <input type="text" id="court" name="court" required value="<?php echo h($player['court'] ?? ''); ?>">
-
-      <label for="play_time">Playing Time</label>
-      <input type="text" id="play_time" name="play_time" required value="<?php echo h($player['play_time'] ?? ''); ?>">
-
-      <label for="blood_group">Blood Group</label>
-      <select id="blood_group" name="blood_group" required>
-        <option value="">Select</option>
-        <?php foreach ($blood_groups as $b): ?>
-          <option value="<?php echo h($b); ?>" <?php echo (($player['blood_group'] ?? '') === $b) ? 'selected' : ''; ?>><?php echo h($b); ?></option>
-        <?php endforeach; ?>
-      </select>
-
-      <label for="playing_years">From how many years have you been playing?</label>
-      <select id="playing_years" name="playing_years" required>
-        <option value="">Select</option>
-        <?php foreach ($playing_years_options as $k=>$v): ?>
-          <option value="<?php echo h($k); ?>" <?php echo (($player['playing_years'] ?? '') === $k) ? 'selected' : ''; ?>><?php echo h($v); ?></option>
-        <?php endforeach; ?>
-      </select>
-
-      <label for="aadhaar_card">Upload Aadhaar Card</label>
-      <?php if (!empty($player['aadhaar_card'])): ?><div><a href="<?php echo h($player['aadhaar_card']); ?>" target="_blank">View Aadhaar Card</a></div><?php endif; ?>
-      <input type="file" id="aadhaar_card" name="aadhaar_card" <?php echo empty($player['aadhaar_card']) ? 'required' : ''; ?> accept=".jpg,.jpeg,.png,.pdf">
-
-      <label for="photo">Upload Photo</label>
-      <?php if (!empty($player['photo'])): ?><div><img src="<?php echo h($player['photo']); ?>" style="width:64px;height:64px;object-fit:cover;border-radius:8px" alt="photo"></div><?php endif; ?>
-      <input type="file" id="photo" name="photo" <?php echo empty($player['photo']) ? 'required' : ''; ?> accept=".jpg,.jpeg,.png">
-
-      <div style="margin-top:12px;font-size:14px">
-        <input type="checkbox" id="terms" checked disabled> <label for="terms" style="display:inline;font-weight:400">I confirm details are correct</label>
-      </div>
-
-      <!-- Save & Pay INR 1 -->
-      <button class="btn" type="button" id="savePayBtn" onclick="onSaveAndPayClick(this)">Save &amp; Pay INR 1</button>
-    </form>
-  </div>
+            <div class="row">
+                <label for="aadhaar_card">Upload Aadhaar Card</label>
+                <?php if (!empty($player['aadhaar_card'])): ?>
+                    <a href="<?php echo h($player['aadhaar_card']); ?>" target="_blank">View Aadhaar Card</a>
+                <?php endif; ?>
+                <input <?php echo empty($player['aadhaar_card']) ? 'required' : ''; ?> type="file" name="aadhaar_card" id="aadhaar_card" accept=".jpg,.jpeg,.png,.pdf">
+            </div>
+            <div class="row">
+                <label for="photo">Upload Photo</label>
+                <?php if (!empty($player['photo'])): ?>
+                    <br><img src="<?php echo h($player['photo']); ?>" class="img-thumb" alt="Photo">
+                <?php endif; ?>
+                <input <?php echo empty($player['photo']) ? 'required' : ''; ?> type="file" name="photo" id="photo" accept=".jpg,.jpeg,.png">
+            </div>
+            <div class="terms">
+                <input type="checkbox" name="terms" id="terms" checked disabled>
+                <label for="terms">I confirm all information is correct and accept all terms and conditions.</label>
+            </div>
+            <button class="btn" type="submit">Save Profile</button>
+        </form>
+    </div>
 </div>
-
-<!-- Include helper & official checkout -->
-<script src="../assets/js/razorpay_checkout.js"></script>
-<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-
-<script>
-function onSaveAndPayClick(btn){
-  btn.disabled = true;
-  btn.innerText = 'Saving...';
-  document.getElementById('start_payment').value = '1';
-  // ensure payment amount is set to ₹1
-  var pa = document.getElementById('payment_amount');
-  if (!pa || !pa.value) {
-    if (pa) pa.value = '1';
-    else {
-      var i = document.createElement('input');
-      i.type='hidden'; i.name='payment_amount'; i.id='payment_amount'; i.value='1';
-      document.getElementById('profileForm').appendChild(i);
-    }
-  }
-  document.getElementById('profileForm').submit();
-}
-</script>
-
-<?php if ($should_start_payment && !empty($created_order)): ?>
-<script>
-(function(){
-  const createdOrder = <?php echo json_encode($created_order); ?>;
-  const publicKey = '<?php echo h($razorpay_cfg['key_id'] ?? ''); ?>';
-  const callbackUrl = '/userpanel/razorpay_callback.php';
-
-  function openDirect(order){
-    if (!order || !publicKey) { console.error('Missing order or key'); return; }
-    const opts = {
-      key: publicKey,
-      amount: order.amount,
-      currency: order.currency || 'INR',
-      name: 'Latur Badminton League',
-      description: 'Registration fee (₹1)',
-      order_id: order.id,
-      prefill: { contact: '<?php echo h($player['mobile'] ?? $phone); ?>' },
-      theme: { color: '#2563eb' },
-      handler: function(res){
-        const fd = new FormData();
-        fd.append('razorpay_payment_id', res.razorpay_payment_id || '');
-        fd.append('razorpay_order_id', res.razorpay_order_id || '');
-        fd.append('razorpay_signature', res.razorpay_signature || '');
-        fd.append('csrf', '<?php echo h($csrf); ?>');
-        fetch(callbackUrl, { method:'POST', credentials:'same-origin', body: fd })
-          .then(r=>r.json().catch(()=>({}))).then(data=>{
-            if (data && data.success) {
-              window.location.href = data.redirect || '/userpanel/payment_success.php';
-            } else {
-              alert('Payment verification failed. Contact support.');
-            }
-          }).catch(e=>{
-            console.error('Verify error', e);
-            alert('Payment made but verification failed.');
-          });
-      },
-      modal: { ondismiss: function(){ console.info('Checkout dismissed'); } }
-    };
-    const rzp = new Razorpay(opts);
-    rzp.open();
-  }
-
-  if (typeof RazorpayCheckout !== 'undefined' && typeof RazorpayCheckout.createAndPay === 'function') {
-    try {
-      RazorpayCheckout.init({ keyId: publicKey, callbackUrl: callbackUrl, prefill:{contact:'<?php echo h($player['mobile'] ?? $phone); ?>'}, theme:{color:'#2563eb'} });
-      RazorpayCheckout.createAndPay({ order_id: '<?php echo h($created_order['id'] ?? ''); ?>', amount_paise: <?php echo (int)$start_payment_amount_paise; ?>, receipt_note:'Player registration fee' });
-    } catch(e) {
-      console.error('Helper failed, fallback', e);
-      openDirect(createdOrder);
-    }
-  } else {
-    openDirect(createdOrder);
-  }
-})();
-</script>
-<?php endif; ?>
-
 </body>
 </html>

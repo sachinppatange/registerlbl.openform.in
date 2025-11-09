@@ -22,7 +22,7 @@ return [
     'key_secret' => getenv('G2OcPqLJAaK6heqt9s0Ms8Dy') ?: 'rzp_test_your_key_secret_here',
 
     // Webhook secret used to verify webhook payload signatures (set in Razorpay dashboard)
-    'webhook_secret' => getenv('RAZORPAY_WEBHOOK_SECRET') ?: 'your_webhook_secret_here',
+    'webhook_secret' => getenv('9f2b3a1e8c4f7a6b0d2e5f8a1f2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0') ?: 'your_webhook_secret_here',
 
     // Mode: 'test' or 'live' (you can use this value to switch endpoints or behavior)
     'mode' => getenv('test') ?: 'test',
@@ -32,7 +32,7 @@ return [
 
     // Default order expiry (seconds) to pass when creating Razorpay orders (optional)
     // e.g., 3600 = 1 hour
-    'order_expiry' => intval(getenv('RAZORPAY_ORDER_EXPIRY') ?: 3600),
+    'order_expiry' => intval(getenv('3600') ?: 3600),
 
     // Optional: additional notes to attach to Razorpay orders by default
     'order_notes' => [],

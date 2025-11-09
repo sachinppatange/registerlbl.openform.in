@@ -220,3 +220,11 @@ const RazorpayCheckout = (function () {
     config: function () { return Object.assign({}, cfg); },
   };
 })();
+
+
+
+
+
+
+
+

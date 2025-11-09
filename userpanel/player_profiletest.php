@@ -2,10 +2,12 @@
 /**
  * userpanel/player_profiletest.php
  *
- * Minimal test page to create a Razorpay order for ₹1 (100 paise) and open Checkout.
- * - Reads keys from ../config/razorpay_config.php (preferred) or env vars.
- * - Use test keys (rzp_test_...) for dev. Do NOT commit live secrets to git.
- * - Remove this file after testing.
+ * Improved test page to create a Razorpay order for ₹1 (100 paise) and open Checkout.
+ * - Reads keys from ../config/razorpay_config.php or environment variables.
+ * - Shows helpful debug info if keys are missing.
+ * - Auto-opens Checkout when both order and public key are available.
+ *
+ * WARNING: Use test keys (rzp_test_...) for development. Do NOT commit live secrets.
  */
 
 session_start();
@@ -26,6 +28,13 @@ function rp_log($msg) {
     $dir = __DIR__ . '/storage/logs';
     if (!is_dir($dir)) @mkdir($dir, 0755, true);
     @file_put_contents($dir . '/razorpay_test.log', date('c') . ' ' . $msg . PHP_EOL, FILE_APPEND | LOCK_EX);
+}
+
+// small mask helper for display
+function mask_key($s) {
+    if (!$s) return '(empty)';
+    if (strlen($s) <= 8) return str_repeat('*', strlen($s));
+    return substr($s,0,4) . str_repeat('*', max(4, strlen($s)-8)) . substr($s,-4);
 }
 
 // default demo amount: ₹1 = 100 paise
@@ -108,6 +117,7 @@ function h($s){ return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
     .err{background:#fff1f2;color:#7f1d1d;padding:10px;border-radius:8px}
     .ok{background:#ecfdf5;color:#065f46;padding:10px;border-radius:8px}
     .meta{font-size:13px;color:#475569;margin-top:8px}
+    .dbg {font-size:13px;color:#1f2937;background:#f1f5f9;padding:8px;border-radius:6px;margin-top:8px}
   </style>
 </head>
 <body>
@@ -118,6 +128,14 @@ function h($s){ return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 <?php if ($create_error): ?>
     <div class="err"><strong>Error:</strong> <?php echo h($create_error); ?></div>
     <div class="meta">Check logs: <?php echo h(__DIR__ . '/storage/logs/razorpay_test.log'); ?></div>
+    <div class="dbg">
+      <strong>Debug:</strong><br>
+      Config path: <?php echo h($configPath); ?><br>
+      key_id: <?php echo h(mask_key($keyId)); ?><br>
+      key_secret: <?php echo h(mask_key($keySecret)); ?><br>
+      If keys are empty, create <code>config/razorpay_config.php</code> with:
+      <pre><?php echo h("<?php\nreturn [\n  'key_id' => 'rzp_test_YOUR_KEY_ID',\n  'key_secret' => 'YOUR_KEY_SECRET',\n];\n"); ?></pre>
+    </div>
 <?php else: ?>
     <div class="ok"><strong>Order created:</strong> <?php echo h($razorpay_order['id'] ?? ''); ?></div>
 
@@ -129,6 +147,13 @@ function h($s){ return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
     <div style="margin-top:12px">
       <strong>Order details:</strong>
       <pre><?php echo h(json_encode($razorpay_order, JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE)); ?></pre>
+    </div>
+
+    <div class="dbg">
+      <strong>Debug:</strong><br>
+      key_id: <?php echo h(mask_key($keyId)); ?><br>
+      key_secret: <?php echo h(mask_key($keySecret)); ?><br>
+      Logs: <?php echo h(__DIR__ . '/storage/logs/razorpay_test.log'); ?>
     </div>
 <?php endif; ?>
 
@@ -146,10 +171,19 @@ function h($s){ return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
       const callbackEndpoint = '/userpanel/razorpay_callback.php'; // optional verification endpoint
 
       function openRzp() {
-        if (!order || !publicKey) {
-          alert('Order or public key missing. Check server logs and config.');
+        if (!order) {
+          console.error('Order missing in JS (server did not create it).');
+          alert('Order not created on server. Check server logs.');
           return;
         }
+        if (!publicKey) {
+          console.error('Public key missing in JS (server config not loaded).');
+          alert('Payment cannot start: public key missing. Check server config.');
+          return;
+        }
+
+        console.info('Opening Razorpay checkout with', { order, publicKey });
+
         const opts = {
           key: publicKey,
           amount: order.amount || amountPaise,
@@ -160,9 +194,7 @@ function h($s){ return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
           prefill: { contact: '' },
           theme: { color: '#2563eb' },
           handler: function (res) {
-            // Show raw payment response and optionally POST to server for verification
             const msg = 'Payment completed.\nPayment ID: ' + (res.razorpay_payment_id||'') + '\nOrder ID: ' + (res.razorpay_order_id||'') + '\nSignature: ' + (res.razorpay_signature||'');
-            // Try server verification if endpoint exists
             try {
               const fd = new FormData();
               fd.append('razorpay_payment_id', res.razorpay_payment_id || '');
@@ -196,9 +228,25 @@ function h($s){ return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
         rzp.open();
       }
 
-      document.getElementById('payBtn')?.addEventListener('click', openRzp);
-      // Uncomment to auto-open checkout on page load:
-      // if (order) setTimeout(openRzp, 400);
+      function openCheckout() {
+        try {
+          openRzp();
+        } catch (e) {
+          console.error('Error while opening checkout:', e);
+          alert('Failed to open checkout. See console for details.');
+        }
+      }
+
+      document.getElementById('payBtn')?.addEventListener('click', openCheckout);
+
+      // Auto-open when both order and publicKey present
+      if (order && publicKey) {
+        // small delay to allow UI to render
+        setTimeout(openCheckout, 350);
+      } else {
+        if (!order) console.debug('Auto-open skipped: order not available');
+        if (!publicKey) console.debug('Auto-open skipped: publicKey not available');
+      }
     })();
   </script>
 </body>

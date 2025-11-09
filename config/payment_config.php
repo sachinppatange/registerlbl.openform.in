@@ -11,9 +11,9 @@ $rzp_webhook_secret = getenv('9f2b3a1e8c4f7a6b0d2e5f8a1f2b3c4d5e6f7a8b9c0d1e2f3a
 $local = __DIR__ . '/payment_local.php';
 if ((!$rzp_key_id || !$rzp_key_secret) && file_exists($local)) {
     require_once $local;
-    $rzp_key_id = defined('RZP_KEY_ID') ? RZP_KEY_ID : $rzp_key_id;
-    $rzp_key_secret = defined('RZP_KEY_SECRET') ? RZP_KEY_SECRET : $rzp_key_secret;
-    $rzp_webhook_secret = defined('RZP_WEBHOOK_SECRET') ? RZP_WEBHOOK_SECRET : $rzp_webhook_secret;
+    $rzp_key_id = defined('rzp_live_D53J9UWwYtGimn') ? RZP_KEY_ID : $rzp_key_id;
+    $rzp_key_secret = defined('w0SnqzH2SOOIc0gnUR7cYO3r') ? RZP_KEY_SECRET : $rzp_key_secret;
+    $rzp_webhook_secret = defined('9f2b3a1e8c4f7a6b0d2e5f8a1f2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0') ? RZP_WEBHOOK_SECRET : $rzp_webhook_secret;
 }
 
 define('RZP_KEY_ID', $rzp_key_id ?: '');

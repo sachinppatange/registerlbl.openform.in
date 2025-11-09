@@ -1,0 +1,17 @@
+{
+    "name": "sachinppatange/registerlbl",
+    "description": "Latur Badminton League Registration System",
+    "type": "project",
+    "require": {
+        "php": ">=7.4",
+        "razorpay/razorpay": "^2.9"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "libs/"
+        }
+    },
+    "config": {
+        "optimize-autoloader": true
+    }
+}

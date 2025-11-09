@@ -3,6 +3,7 @@ session_start();
 require_once __DIR__ . '/../userpanel/auth.php';
 require_once __DIR__ . '/player_repository.php';
 require_once __DIR__ . '/../config/player_config.php';
+require_once __DIR__ . '/../config/payment_config.php';
 
 // Authentication: Only logged-in users can fill/edit profile
 require_auth();
@@ -289,12 +290,15 @@ function h(?string $v): string { return htmlspecialchars((string)$v, ENT_QUOTES,
         .terms { margin-top:12px; font-size:14px;}
         .lock-select { background:#e2e8f0; pointer-events:none;}
         .img-thumb { width:54px; height:54px; object-fit:cover; border-radius:9px; margin-bottom:6px; border:1px solid var(--border);}
+        .btn-group { display:flex; gap:10px; margin-top:14px;}
+        .btn-secondary { background:#0ea5e9;}
         @media (max-width:500px){
             .card { max-width:100%; padding:12px 2px;}
             .logo { width: 54px; height: 54px;}
             .logo img { width: 35px; height: 35px;}
             h1 { font-size:18px;}
             .btn { padding:10px 0; font-size:14px;}
+            .btn-group { flex-direction:column; gap:8px;}
         }
     </style>
     <script>
@@ -418,9 +422,20 @@ function h(?string $v): string { return htmlspecialchars((string)$v, ENT_QUOTES,
                 <input type="checkbox" name="terms" id="terms" checked disabled>
                 <label for="terms">I confirm all information is correct and accept all terms and conditions.</label>
             </div>
-            <button class="btn" type="submit">Save Profile</button>
+            <div class="btn-group">
+                <button class="btn" type="submit">Save Profile</button>
+                <button class="btn btn-secondary" type="button" id="saveAndPayBtn" onclick="handleSaveAndPay(event)">Save &amp; Pay</button>
+            </div>
         </form>
     </div>
 </div>
+<script src="js/payment.js"></script>
+<script>
+    // Payment configuration
+    window.LBL_PAYMENT = {
+        amount: <?php echo defined('PAYMENT_DEFAULT_AMOUNT') ? PAYMENT_DEFAULT_AMOUNT : 500; ?>,
+        csrf: '<?php echo h($csrf); ?>'
+    };
+</script>
 </body>
 </html>

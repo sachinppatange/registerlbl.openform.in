@@ -1,0 +1,29 @@
+# Composer dependencies
+/vendor/
+composer.lock
+
+# Environment variables (if using .env file)
+.env
+.env.local
+
+# Logs
+*.log
+/userpanel/storage/logs/*.log
+
+# Uploaded files (optional - may want to exclude from repo)
+# /userpanel/storage/uploads/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+/tmp/
+*.tmp

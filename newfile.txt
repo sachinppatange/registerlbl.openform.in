@@ -34,3 +34,156 @@ data:
 - public/assets/
 
 - README.md
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Config
+config/razorpay_config.php
+
+# User (frontend) pages / endpoints
+userpanel/payment.php
+userpanel/razorpay_create_order.php
+userpanel/razorpay_callback.php
+userpanel/payment_success.php
+userpanel/payment_failed.php
+userpanel/payment_repository.php
+
+# Public webhook endpoint (Razorpay -> your server)
+public/webhook/razorpay.php
+
+# Client assets
+public/assets/js/razorpay_checkout.js
+public/assets/css/payment.css   # optional - styles for checkout UI
+
+# Admin pages
+adminpanel/payments_list.php
+adminpanel/payment_view.php
+
+# DB migration
+migrations/2025xxxx_create_payments_table.sql
+
+# SDK / library (place Razorpay PHP SDK here or use composer vendor)
+vendor/razorpay/razorpay-php/   # directory for Razorpay PHP SDK (or use composer)
+
+
+
+
+config/razorpay_config.php
+userpanel/payment.php
+userpanel/razorpay_create_order.php
+userpanel/razorpay_callback.php
+userpanel/payment_success.php
+userpanel/payment_failed.php
+userpanel/payment_repository.php
+public/webhook/razorpay.php
+public/assets/js/razorpay_checkout.js
+public/assets/css/payment.css
+adminpanel/payments_list.php
+adminpanel/payment_view.php
+migrations/2025xxxx_create_payments_table.sql
+vendor/razorpay/razorpay-php/   (or composer-managed vendor/)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Combined project file structure — each entry marked [EXISTING], [NEW] or [MODIFY]
+
+# Config
+config/app_config.php                                          [EXISTING]
+config/wa_config.php                                           [EXISTING]
+config/player_config.php                                       [EXISTING]
+-- config/razorpay_config.php                                     [NEW]   # Razorpay keys + webhook secret
+
+# Admin panel (existing)
+adminpanel/admin_auth.php                                      [EXISTING]
+adminpanel/admin_dashboard.php                                 [EXISTING]  (may add Payments link) [MODIFY]
+adminpanel/admin_login.php                                     [EXISTING]
+adminpanel/admin_logout.php                                    [EXISTING]
+adminpanel/player_repository.php                               [EXISTING]
+adminpanel/player_dashboard.php                                [EXISTING]  (may show payment summary) [MODIFY]
+adminpanel/player_edit.php                                     [EXISTING]
+adminpanel/player_view.php                                     [EXISTING]
+adminpanel/player_status.php                                   [EXISTING]
+adminpanel/player_export_excel.php                             [EXISTING]
+adminpanel/player_export_pdf.php                               [EXISTING]
+adminpanel/whatsapp.php                                        [EXISTING]
+adminpanel/storage/logs/whatsapp.log                           [EXISTING]
+
+# Admin panel (new payment UI)
+-- adminpanel/payments_list.php                                   [NEW]   # list/filter payments (paid/failed/pending)
+-- adminpanel/payment_view.php                                    [NEW]   # view single payment details
+
+# User panel (existing)
+userpanel/auth.php                                             [EXISTING]
+userpanel/dashboard.php                                        [EXISTING]
+userpanel/login.php                                            [EXISTING]
+userpanel/logout.php                                           [EXISTING]
+userpanel/signup.php                                           [EXISTING]
+userpanel/whatsapp.php                                         [EXISTING]
+userpanel/player_repository.php                                [EXISTING]
+userpanel/user_repository.php                                  [EXISTING]
+userpanel/player_profile.php                                   [EXISTING]  (add "Save & Pay" button) [MODIFY]
+userpanel/storage/logs/whatsapp.log                            [EXISTING]
+
+# User panel (payment / Razorpay)
+userpanel/payment.php                                          [NEW]   # optional page to initiate payment / summary
+-- userpanel/razorpay_create_order.php                            [NEW]   # server endpoint to create Razorpay order
+-- userpanel/razorpay_callback.php                                [NEW]   # verify checkout signature & finalize
+-- userpanel/payment_success.php                                  [NEW]   # landing page on success
+-- userpanel/payment_failed.php                                   [NEW]   # landing page on failure/cancel
+-- userpanel/payment_repository.php                               [NEW]   # DB helper for payments
+
+# Public (existing)
+index.php                                               [EXISTING]
+assets/                                                  [EXISTING]
+assets/lbllogo.svg                                       [EXISTING]
+
+# Public (payment assets & webhook)
+-- assets/js/razorpay_checkout.js                           [NEW]   # client helper to open Razorpay checkout
+-- assets/css/payment.css                                   [NEW]   # optional styles for payment UI
+-- webhook/razorpay.php                                     [NEW]   # public webhook endpoint for Razorpay events
+
+---- # Vendor / SDK
+vendor/razorpay/razorpay-php/                                   [NEW]   # Razorpay PHP SDK (or use composer-managed vendor/)
+
+---- # Migrations
+migrations/2025xxxx_create_payments_table.sql                   [NEW]   # payments table: order_id, payment_id, user_mobile, amount, status, meta, timestamps
+
+---- # Misc / README
+README.md                                                      [EXISTING]  (update doc for payments)
+
+# Notes on files to MODIFY (where to add Pay button / links)
+- userpanel/player_profile.php   -> add "Save & Pay" / "Pay" button, include public/assets/js/razorpay_checkout.js
+- adminpanel/admin_dashboard.php -> add link/menu to adminpanel/payments_list.php (optional)
+- adminpanel/player_dashboard.php -> optionally show payment status column (if desired)

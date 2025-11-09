@@ -1,0 +1,158 @@
+:root{
+  --primary: #2563eb;
+  --accent: #0ea5e9;
+  --bg: #f8fafc;
+  --card: #ffffff;
+  --muted: #64748b;
+  --success: #10b981;
+  --danger: #ef4444;
+  --shadow: 0 6px 20px rgba(37,99,235,0.06);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --max-width: 520px;
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+}
+
+/* Page layout */
+.payment-wrap{
+  display:grid;
+  place-items:center;
+  min-height:100vh;
+  padding:20px;
+  background:var(--bg);
+  font-family:var(--font-sans);
+  color:#0f172a;
+}
+
+/* Card */
+.payment-card{
+  width:100%;
+  max-width:var(--max-width);
+  background:var(--card);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow);
+  padding:20px;
+  box-sizing:border-box;
+}
+
+/* Header */
+.payment-card .title{
+  font-size:20px;
+  font-weight:700;
+  color:var(--primary);
+  margin:0 0 6px;
+}
+.payment-card .subtitle{
+  color:var(--muted);
+  font-size:14px;
+  margin-bottom:14px;
+}
+
+/* Amount display */
+.amount-row{
+  display:flex;
+  align-items:baseline;
+  gap:12px;
+  margin:10px 0 16px;
+}
+.amount{
+  font-size:28px;
+  font-weight:800;
+  color:var(--primary);
+}
+.currency{
+  color:var(--muted);
+  font-size:14px;
+  margin-left:6px;
+}
+
+/* Buttons */
+.btn-pay, .btn-secondary {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  padding:12px 16px;
+  border-radius:10px;
+  border:0;
+  cursor:pointer;
+  font-weight:700;
+  font-size:15px;
+  color:#fff;
+  text-decoration:none;
+}
+.btn-pay{
+  background: linear-gradient(180deg,var(--primary), #1e4ed8);
+  box-shadow:0 6px 18px rgba(37,99,235,0.12);
+}
+.btn-secondary{
+  background: var(--accent);
+  color:#012a33;
+}
+
+/* Disabled state */
+.btn-pay[disabled], .btn-secondary[disabled]{
+  opacity:.6;
+  cursor:not-allowed;
+}
+
+/* Small text / helpers */
+.helper{
+  font-size:13px;
+  color:var(--muted);
+  margin-top:8px;
+}
+.note{
+  font-size:13px;
+  color:var(--muted);
+  background:#f1f5f9;
+  padding:10px;
+  border-radius:8px;
+  margin-top:12px;
+}
+
+/* Loader */
+.loader {
+  display:inline-block;
+  width:18px;
+  height:18px;
+  border-radius:50%;
+  border:3px solid rgba(255,255,255,0.25);
+  border-top-color: rgba(255,255,255,0.9);
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Receipt / details */
+.receipt {
+  margin-top:14px;
+  padding:12px;
+  border-radius:8px;
+  background:#fbfdff;
+  border:1px solid #eef2ff;
+  font-size:14px;
+  color:#0b1724;
+}
+.receipt .row { display:flex; justify-content:space-between; gap:12px; padding:6px 0; border-bottom:1px dashed #eef2ff; }
+.receipt .row:last-child { border-bottom:0; }
+
+/* Error / Success messages */
+.msg {
+  margin-top:12px;
+  padding:10px;
+  border-radius:8px;
+  font-size:14px;
+}
+.msg.success { background:#ecfdf5; color:var(--success); border:1px solid #bbf7d0; }
+.msg.error { background:#fff1f2; color:var(--danger); border:1px solid #fecaca; }
+
+/* Responsive */
+@media (max-width:520px){
+  .payment-card{ padding:16px; border-radius:10px; }
+  .amount{ font-size:22px; }
+  .btn-pay, .btn-secondary{ width:100%; font-size:15px; padding:12px; }
+}
+
+/* Utility */
+.text-muted { color:var(--muted); font-size:13px; }
+.kbd { font-family:monospace; background:#eef2ff; padding:6px 8px; border-radius:6px; font-size:13px; display:inline-block; }

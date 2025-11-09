@@ -110,4 +110,125 @@ function is_dob_allowed(?string $dob): bool {
 // ... inside update_player():
 // if (array_key_exists('dob', $data) && !is_dob_allowed($data['dob'])) return false;
 
+/**
+ * Create a payment record in the database
+ * 
+ * @param int|null $player_id Player ID (nullable)
+ * @param string $order_id Razorpay order ID
+ * @param int $amount Amount in paise
+ * @param string $currency Currency code
+ * @param array|null $metadata Additional metadata (optional)
+ * @return int|false Payment record ID or false on failure
+ */
+function create_payment_record(?int $player_id, string $order_id, int $amount, string $currency = 'INR', ?array $metadata = null) {
+    try {
+        $pdo = db();
+        $sql = "INSERT INTO payments (player_id, order_id, amount, currency, status, metadata, created_at) 
+                VALUES (?, ?, ?, ?, 'pending', ?, NOW())";
+        $stmt = $pdo->prepare($sql);
+        $metadataJson = $metadata ? json_encode($metadata) : null;
+        $result = $stmt->execute([$player_id, $order_id, $amount, $currency, $metadataJson]);
+        return $result ? $pdo->lastInsertId() : false;
+    } catch (Throwable $e) {
+        error_log("Failed to create payment record: " . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Mark payment as paid
+ * 
+ * @param string $order_id Razorpay order ID
+ * @param string $payment_id Razorpay payment ID
+ * @return bool Success status
+ */
+function mark_payment_paid(string $order_id, string $payment_id): bool {
+    try {
+        $pdo = db();
+        $sql = "UPDATE payments SET status = 'paid', payment_id = ?, updated_at = NOW() 
+                WHERE order_id = ?";
+        $stmt = $pdo->prepare($sql);
+        return $stmt->execute([$payment_id, $order_id]);
+    } catch (Throwable $e) {
+        error_log("Failed to mark payment as paid: " . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Mark payment as failed
+ * 
+ * @param string $order_id Razorpay order ID
+ * @return bool Success status
+ */
+function mark_payment_failed(string $order_id): bool {
+    try {
+        $pdo = db();
+        $sql = "UPDATE payments SET status = 'failed', updated_at = NOW() 
+                WHERE order_id = ?";
+        $stmt = $pdo->prepare($sql);
+        return $stmt->execute([$order_id]);
+    } catch (Throwable $e) {
+        error_log("Failed to mark payment as failed: " . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Get payment by order ID
+ * 
+ * @param string $order_id Razorpay order ID
+ * @return array|null Payment record
+ */
+function get_payment_by_order_id(string $order_id): ?array {
+    try {
+        $pdo = db();
+        $stmt = $pdo->prepare("SELECT * FROM payments WHERE order_id = ? LIMIT 1");
+        $stmt->execute([$order_id]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result ?: null;
+    } catch (Throwable $e) {
+        error_log("Failed to fetch payment: " . $e->getMessage());
+        return null;
+    }
+}
+
+/**
+ * Get payment by payment ID
+ * 
+ * @param string $payment_id Razorpay payment ID
+ * @return array|null Payment record
+ */
+function get_payment_by_payment_id(string $payment_id): ?array {
+    try {
+        $pdo = db();
+        $stmt = $pdo->prepare("SELECT * FROM payments WHERE payment_id = ? LIMIT 1");
+        $stmt->execute([$payment_id]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result ?: null;
+    } catch (Throwable $e) {
+        error_log("Failed to fetch payment: " . $e->getMessage());
+        return null;
+    }
+}
+
+/**
+ * Get payment by ID
+ * 
+ * @param int $id Payment ID
+ * @return array|null Payment record
+ */
+function get_payment_by_id(int $id): ?array {
+    try {
+        $pdo = db();
+        $stmt = $pdo->prepare("SELECT * FROM payments WHERE id = ? LIMIT 1");
+        $stmt->execute([$id]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result ?: null;
+    } catch (Throwable $e) {
+        error_log("Failed to fetch payment: " . $e->getMessage());
+        return null;
+    }
+}
+
 // (rest of the file)

@@ -21,7 +21,7 @@
 session_start();
 
 // Try to load config file if available
-$config_path = __DIR__ . '/../config/razorpay_config.php';
+$config_path = __DIR__ . '../config/razorpay_config.php';
 $cfg = [];
 if (file_exists($config_path)) {
     $cfg = require $config_path;

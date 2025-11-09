@@ -57,7 +57,7 @@ function compute_age_group_from_dob(?string $dob): string {
 $max_dob = '1995-11-01'; // 1 Nov 1995
 $min_dob = '1945-01-01'; // optional lower bound
 
-// Handle form submit
+// Handle form submit (server-side save via normal POST still supported if needed)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && hash_equals($csrf, $_POST['csrf'] ?? '')) {
 
     // Basic required fields to validate (server-side)
@@ -341,7 +341,8 @@ function h(?string $v): string { return htmlspecialchars((string)$v, ENT_QUOTES,
         <div class="sub">Fill your details for the Latur Badminton League registration</div>
         <?php if($msg_success): ?><div class="msg success"><?php echo h($msg_success);?></div><?php endif;?>
         <?php if($msg_error): ?><div class="msg error"><?php echo h($msg_error);?></div><?php endif;?>
-        <form id="profileForm" method="post" enctype="multipart/form-data" autocomplete="off" style="text-align:left;">
+        <!-- Prevent default form submission; Save & Pay will handle save + payment -->
+        <form id="profileForm" onsubmit="return false;" method="post" enctype="multipart/form-data" autocomplete="off" style="text-align:left;">
             <input type="hidden" name="csrf" value="<?php echo h($csrf); ?>">
 
             <div class="row">
@@ -427,16 +428,16 @@ function h(?string $v): string { return htmlspecialchars((string)$v, ENT_QUOTES,
                 <input type="checkbox" name="terms" id="terms" checked disabled>
                 <label for="terms">I confirm all information is correct and accept all terms and conditions.</label>
             </div>
-            <button class="btn" type="submit">Save Profile</button>
 
-            <!-- Save & Pay button: uses JS to save profile via AJAX then initiate payment -->
+            <!-- Removed plain "Save Profile" submit button.
+                 Save & Pay will perform save (via AJAX) and then initiate payment. -->
             <button id="savePayBtn" class="btn savepay" type="button">Save &amp; Pay</button>
         </form>
     </div>
 </div>
 
-<!-- Include payment helper JS (expects /userpanel/js/payment.js to exist) -->
-<script src="../userpanel/js/payment.js"></script>
+<!-- Load payment helper JS from same folder (page is /userpanel/) -->
+<script src="js/payment.js"></script>
 <script>
 (function(){
     const csrfToken = '<?php echo h($csrf); ?>';
@@ -444,7 +445,13 @@ function h(?string $v): string { return htmlspecialchars((string)$v, ENT_QUOTES,
     const savePayBtn = document.getElementById('savePayBtn');
     const profileForm = document.getElementById('profileForm');
 
+    // Improved client-side save routine: validate, then send form via AJAX
     async function saveProfileAjax() {
+        // Use native validation first
+        if (!profileForm.reportValidity()) {
+            return { ok: false, error: 'Please fill required fields' };
+        }
+
         const formData = new FormData(profileForm);
         // Ensure CSRF included
         formData.set('csrf', csrfToken);
@@ -470,6 +477,14 @@ function h(?string $v): string { return htmlspecialchars((string)$v, ENT_QUOTES,
             return { ok: false, error: tmp.textContent.trim() || 'Failed to save profile' };
         }
 
+        // If server returned JSON error (in case of API path), try parse
+        try {
+            const j = JSON.parse(text);
+            if (j && j.error) return { ok: false, error: j.error };
+        } catch (e) {
+            // ignore parse error
+        }
+
         return { ok: false, error: 'Failed to save profile' };
     }
 
@@ -486,8 +501,8 @@ function h(?string $v): string { return htmlspecialchars((string)$v, ENT_QUOTES,
             }
 
             savePayBtn.textContent = 'Starting payment...';
-            // call doSaveAndPay from payment.js
-            await doSaveAndPay({ csrf: csrfToken, amountRupees: defaultAmount });
+            // call doSaveAndPay from payment.js (must be globally exposed)
+            await doSaveAndPay({ csrf: csrfToken, amountRupees: defaultAmount, prefillName: document.getElementById('full_name').value });
             // doSaveAndPay will redirect on success
         } catch (err) {
             console.error(err);

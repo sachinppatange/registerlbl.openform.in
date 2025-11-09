@@ -3,6 +3,7 @@ session_start();
 require_once __DIR__ . '/../userpanel/auth.php';
 require_once __DIR__ . '/player_repository.php';
 require_once __DIR__ . '/../config/player_config.php';
+require_once __DIR__ . '/../config/payment_config.php';
 
 // Authentication: Only logged-in users can fill/edit profile
 require_auth();
@@ -283,6 +284,10 @@ function h(?string $v): string { return htmlspecialchars((string)$v, ENT_QUOTES,
         input[type="file"] { padding:0;}
         .row { margin-bottom:14px;}
         .btn { width:100%; background:var(--primary); color:#fff; border-radius:10px; padding:13px 0; font-size:16px; font-weight:600; border:0; cursor:pointer; margin-top:14px;}
+        .btn.secondary { background:var(--secondary);}
+        .btn:disabled { background:var(--muted); cursor:not-allowed;}
+        .btn-group { display:flex; gap:10px; margin-top:14px;}
+        .btn-group .btn { margin-top:0;}
         .msg { margin-bottom:10px; padding:8px; border-radius:8px; font-size:14px;}
         .msg.success { background:#e0fce0; color:#166534;}
         .msg.error { background:#fee2e2; color:#7f1d1d;}
@@ -295,6 +300,7 @@ function h(?string $v): string { return htmlspecialchars((string)$v, ENT_QUOTES,
             .logo img { width: 35px; height: 35px;}
             h1 { font-size:18px;}
             .btn { padding:10px 0; font-size:14px;}
+            .btn-group { flex-direction:column; gap:8px;}
         }
     </style>
     <script>
@@ -332,7 +338,7 @@ function h(?string $v): string { return htmlspecialchars((string)$v, ENT_QUOTES,
         <div class="sub">Fill your details for the Latur Badminton League registration</div>
         <?php if($msg_success): ?><div class="msg success"><?php echo h($msg_success);?></div><?php endif;?>
         <?php if($msg_error): ?><div class="msg error"><?php echo h($msg_error);?></div><?php endif;?>
-        <form method="post" enctype="multipart/form-data" autocomplete="off" style="text-align:left;">
+        <form id="player-profile-form" method="post" action="player_profile.php" enctype="multipart/form-data" autocomplete="off" style="text-align:left;">
             <input type="hidden" name="csrf" value="<?php echo h($csrf); ?>">
 
             <div class="row">
@@ -418,9 +424,26 @@ function h(?string $v): string { return htmlspecialchars((string)$v, ENT_QUOTES,
                 <input type="checkbox" name="terms" id="terms" checked disabled>
                 <label for="terms">I confirm all information is correct and accept all terms and conditions.</label>
             </div>
-            <button class="btn" type="submit">Save Profile</button>
+            <div class="btn-group">
+                <button class="btn" type="submit">Save Profile</button>
+                <button class="btn secondary" type="button" id="save-pay-btn" onclick="PaymentFlow.saveAndPay()">Save &amp; Pay</button>
+            </div>
         </form>
     </div>
 </div>
+
+<!-- Razorpay Checkout Script -->
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+
+<!-- Payment Flow Script -->
+<script src="js/payment.js"></script>
+<script>
+    // Initialize payment flow with configuration
+    PaymentFlow.init({
+        csrf: '<?php echo h($csrf); ?>',
+        amount: <?php echo DEFAULT_AMOUNT_RUPEES; ?>
+    });
+</script>
+
 </body>
 </html>

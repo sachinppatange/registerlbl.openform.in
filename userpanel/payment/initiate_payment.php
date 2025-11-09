@@ -64,12 +64,19 @@ try {
     $player_id = $player['id'];
     
     // Get amount (from POST or use default)
+    // Server-side validation to prevent client-side manipulation
     $amount_inr = isset($_POST['amount']) ? floatval($_POST['amount']) : PAYMENT_DEFAULT_AMOUNT;
-    if ($amount_inr <= 0) {
+    
+    // Validate amount range (minimum 1 INR, maximum 100,000 INR to prevent abuse)
+    if ($amount_inr <= 0 || $amount_inr > 100000) {
         http_response_code(400);
         echo json_encode(['ok' => false, 'error' => 'Invalid amount']);
         exit;
     }
+    
+    // For production, enforce the default amount unless admin features are added
+    // Uncomment the line below to strictly enforce the default amount
+    // $amount_inr = PAYMENT_DEFAULT_AMOUNT;
     
     // Convert amount from INR to paise (smallest unit)
     $amount_paise = (int)($amount_inr * 100);

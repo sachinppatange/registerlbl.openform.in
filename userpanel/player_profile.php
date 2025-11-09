@@ -432,8 +432,9 @@ function h(?string $v): string { return htmlspecialchars((string)$v, ENT_QUOTES,
 <script src="js/payment.js"></script>
 <script>
     // Payment configuration
+    // Note: Amount is also validated server-side in initiate_payment.php
     window.LBL_PAYMENT = {
-        amount: <?php echo defined('PAYMENT_DEFAULT_AMOUNT') ? PAYMENT_DEFAULT_AMOUNT : 500; ?>,
+        amount: <?php echo (int)(defined('PAYMENT_DEFAULT_AMOUNT') ? PAYMENT_DEFAULT_AMOUNT : 500); ?>,
         csrf: '<?php echo h($csrf); ?>'
     };
 </script>

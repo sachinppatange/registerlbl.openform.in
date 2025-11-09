@@ -82,7 +82,7 @@ try {
         exit;
     }
     
-    if ($payment_record['player_id'] != $player_id) {
+    if ((int)$payment_record['player_id'] !== (int)$player_id) {
         http_response_code(403);
         echo json_encode(['ok' => false, 'error' => 'Unauthorized']);
         exit;

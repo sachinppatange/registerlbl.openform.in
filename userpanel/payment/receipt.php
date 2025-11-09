@@ -25,7 +25,7 @@ if ($payment_id > 0) {
     if ($player) {
         $payment = get_payment_by_id($payment_id);
         // Verify payment belongs to current user and is paid
-        if (!$payment || $payment['player_id'] != $player['id'] || $payment['status'] !== 'paid') {
+        if (!$payment || (int)$payment['player_id'] !== (int)$player['id'] || $payment['status'] !== 'paid') {
             $payment = null;
         }
     }

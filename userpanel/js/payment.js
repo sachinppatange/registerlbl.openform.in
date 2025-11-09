@@ -203,26 +203,34 @@ async function handleSaveAndPay(event) {
         
         const html = await response.text();
         
-        // Check if profile save was successful by looking for success message
-        if (html.includes('Player profile saved successfully') || response.ok) {
-            // Profile saved, now initiate payment
+        // Parse HTML response to check for success/error messages
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const successMsg = doc.querySelector('.msg.success');
+        const errorMsg = doc.querySelector('.msg.error');
+        
+        if (successMsg && successMsg.textContent.includes('Player profile saved successfully')) {
+            // Profile saved successfully, now initiate payment
             if (btn) {
                 btn.textContent = 'Initiating Payment...';
             }
             await startPaymentFlow(amount, csrfToken);
-        } else if (html.includes('msg error')) {
-            // Extract error message if possible
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
-            const errorMsg = doc.querySelector('.msg.error');
-            alert('Please fix the errors in the form: ' + (errorMsg ? errorMsg.textContent : 'Validation failed'));
+        } else if (errorMsg) {
+            // Profile save failed with validation errors
+            alert('Please fix the errors in the form: ' + errorMsg.textContent.trim());
             
             if (btn) {
                 btn.disabled = false;
                 btn.textContent = 'Save & Pay';
             }
+        } else if (response.ok && !errorMsg) {
+            // Response OK but no explicit success message - assume success
+            if (btn) {
+                btn.textContent = 'Initiating Payment...';
+            }
+            await startPaymentFlow(amount, csrfToken);
         } else {
-            throw new Error('Profile save status unclear');
+            throw new Error('Unable to determine profile save status');
         }
         
     } catch (error) {

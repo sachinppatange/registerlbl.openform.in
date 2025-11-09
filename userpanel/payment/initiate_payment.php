@@ -1,10 +1,10 @@
 <?php
 session_start();
-require_once __DIR__ . '/../config/payment_config.php';
-require_once __DIR__ . '/../config/wa_config.php';
-require_once __DIR__ . '/../auth.php';
-require_once __DIR__ . '/../player_repository.php';
-require_once __DIR__ . '/../libs/RazorpayClient.php';
+require_once __DIR__ . '../config/payment_config.php';
+require_once __DIR__ . '../config/wa_config.php';
+require_once __DIR__ . '../auth.php';
+require_once __DIR__ . '../player_repository.php';
+require_once __DIR__ . '../libs/RazorpayClient.php';
 
 header('Content-Type: application/json');
 

@@ -3,7 +3,6 @@ session_start();
 require_once __DIR__ . '/../userpanel/auth.php';
 require_once __DIR__ . '/player_repository.php';
 require_once __DIR__ . '/../config/player_config.php';
-$razorpay_cfg = require __DIR__ . '/../config/razorpay_config.php';
 
 // Authentication: Only logged-in users can fill/edit profile
 require_auth();
@@ -15,8 +14,6 @@ $csrf = $_SESSION['csrf'];
 
 $msg_error = '';
 $msg_success = '';
-$should_start_payment = false;
-$start_payment_amount_paise = 0;
 
 // Load existing player profile if available
 $player = player_get_by_phone($phone) ?? ['mobile' => $phone];
@@ -51,9 +48,6 @@ function compute_age_group_from_dob(?string $dob): string {
 // Constraint: disallow DOB after 1995-11-01
 $max_dob = '1995-11-01'; // 1 Nov 1995
 $min_dob = '1945-01-01'; // optional lower bound
-
-// Check if the form requested a payment start after save
-$start_payment_requested = (isset($_POST['start_payment']) && trim($_POST['start_payment']) === '1');
 
 // Handle form submit
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && hash_equals($csrf, $_POST['csrf'] ?? '')) {
@@ -230,14 +224,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && hash_equals($csrf, $_POST['csrf'] ?
             }
         }
     }
-
-    // If user requested to start payment after successful save, prepare JS trigger
-    if ($start_payment_requested && empty($msg_error) && !empty($msg_success)) {
-        // derive amount from posted field (in rupees) or use a default (199)
-        $amt_rupees = (float)str_replace(',', '.', ($_POST['payment_amount'] ?? '199'));
-        $start_payment_amount_paise = max(1, (int) round($amt_rupees * 100));
-        $should_start_payment = true;
-    }
 }
 
 // Age Group options
@@ -272,9 +258,6 @@ $playing_years_options['More than 20 Years'] = 'More than 20 Years';
 // Helper for escaping output
 function h(?string $v): string { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
 
-// Default payment amount (rupees) — change as needed or make configurable
-$default_payment_amount = $player['registration_fee'] ?? 199; // rupees
-
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -300,7 +283,6 @@ $default_payment_amount = $player['registration_fee'] ?? 199; // rupees
         input[type="file"] { padding:0;}
         .row { margin-bottom:14px;}
         .btn { width:100%; background:var(--primary); color:#fff; border-radius:10px; padding:13px 0; font-size:16px; font-weight:600; border:0; cursor:pointer; margin-top:14px;}
-        .btn.secondary { background:#0ea5e9; margin-top:8px; }
         .msg { margin-bottom:10px; padding:8px; border-radius:8px; font-size:14px;}
         .msg.success { background:#e0fce0; color:#166534;}
         .msg.error { background:#fee2e2; color:#7f1d1d;}
@@ -335,20 +317,6 @@ $default_payment_amount = $player['registration_fee'] ?? 199; // rupees
         else if (age > 55) group = 'Above 55';
         document.getElementById('age_group').value = group;
     }
-
-    // Save & Pay button: set hidden start_payment flag then submit form
-    function onSaveAndPayClick(btn) {
-        btn.disabled = true;
-        btn.innerText = 'Saving...';
-        const form = document.getElementById('profileForm');
-        document.getElementById('start_payment').value = '1';
-        // Ensure amount field exists; if empty, set default
-        const amt = document.getElementById('payment_amount');
-        if (!amt || !amt.value) {
-            document.getElementById('payment_amount').value = '<?php echo h($default_payment_amount); ?>';
-        }
-        form.submit();
-    }
     </script>
 </head>
 <body>
@@ -364,11 +332,8 @@ $default_payment_amount = $player['registration_fee'] ?? 199; // rupees
         <div class="sub">Fill your details for the Latur Badminton League registration</div>
         <?php if($msg_success): ?><div class="msg success"><?php echo h($msg_success);?></div><?php endif;?>
         <?php if($msg_error): ?><div class="msg error"><?php echo h($msg_error);?></div><?php endif;?>
-        <form id="profileForm" method="post" enctype="multipart/form-data" autocomplete="off" style="text-align:left;">
+        <form method="post" enctype="multipart/form-data" autocomplete="off" style="text-align:left;">
             <input type="hidden" name="csrf" value="<?php echo h($csrf); ?>">
-            <!-- Hidden controls for payment flow -->
-            <input type="hidden" name="start_payment" id="start_payment" value="0">
-            <input type="hidden" name="payment_amount" id="payment_amount" value="<?php echo h($default_payment_amount); ?>">
 
             <div class="row">
                 <label for="full_name">Full Name</label>
@@ -382,7 +347,7 @@ $default_payment_amount = $player['registration_fee'] ?? 199; // rupees
 
             <div class="row">
                 <label for="dob">Date of Birth</label>
-                <input required type="date" name="dob" id="dob" onchange="updateAgeGroup()" min="1970-01-01" max="<?php echo h($max_dob); ?>" value="<?php echo h($player['dob'] ?? ''); ?>">
+                <input required type="date" name="dob" id="dob" onchange="updateAgeGroup()" min="1970-01-01" max="<?php echo date('Y-m-d'); ?>" value="<?php echo h($player['dob'] ?? ''); ?>">
             </div>
             <div class="row">
                 <label for="age_group">Age Group</label>
@@ -453,39 +418,9 @@ $default_payment_amount = $player['registration_fee'] ?? 199; // rupees
                 <input type="checkbox" name="terms" id="terms" checked disabled>
                 <label for="terms">I confirm all information is correct and accept all terms and conditions.</label>
             </div>
-
-            <!-- Primary actions -->
             <button class="btn" type="submit">Save Profile</button>
-            <button class="btn secondary" type="button" id="savePayBtn" onclick="onSaveAndPayClick(this)">Save &amp; Pay</button>
         </form>
     </div>
 </div>
-
-<!-- Include Razorpay client helper -->
-<script src="../assets/js/razorpay_checkout.js"></script>
-
-<?php if ($should_start_payment): ?>
-<script>
-(function(){
-    // Initialize RazorpayCheckout with public key from server config
-    if (typeof RazorpayCheckout === 'undefined') {
-        console.error('RazorpayCheckout not loaded.');
-        return;
-    }
-    RazorpayCheckout.init({
-        keyId: '<?php echo h($razorpay_cfg['key_id'] ?? ''); ?>',
-        createOrderUrl: '/userpanel/razorpay_create_order.php',
-        callbackUrl: '/userpanel/razorpay_callback.php',
-        prefill: { contact: '<?php echo h($player['mobile'] ?? $phone); ?>' },
-        theme: { color: '#2563eb' }
-    });
-
-    // start payment with server-provided amount (paise)
-    const amountPaise = <?php echo (int)$start_payment_amount_paise; ?>;
-    RazorpayCheckout.createAndPay({ amount_paise: amountPaise, receipt_note: 'Player registration fee' });
-})();
-</script>
-<?php endif; ?>
-
 </body>
 </html>

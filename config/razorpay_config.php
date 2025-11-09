@@ -1,22 +1,13 @@
 <?php
-/**
- * config/razorpay_config.php
- *
- * DEV / temporary config. This file will be read by userpanel pages via:
- * require __DIR__ . '/../config/razorpay_config.php'
- *
- * WARNING: Do NOT commit this file to a public repository. If these are live keys,
- * rotate/revoke them after testing.
- */
+// Razorpay configuration.
+// Prefer environment variables. If not available, fill the values below (for local dev only).
+// Use test keys (rzp_test_...) for development. Do NOT commit live secrets to git.
 
 return [
-    // Public Key (Razorpay Key ID)
-    'key_id' => 'rzp_live_D53J9UWwYtGimn',
+    // Public key (example: rzp_test_abc123...) - visible in client (public)
+    'key_id' => getenv('rzp_live_D53J9UWwYtGimn') ?: (getenv('RAZORPAY_KEY') ?: ''),
 
-    // Secret Key (Razorpay Key Secret)
-    'key_secret' => 'w0SnqzH2SOOIc0gnUR7cYO3r',
+    // Secret key (example: abc12345...) - keep secret
+    'key_secret' => getenv('w0SnqzH2SOOIc0gnUR7cYO3r') ?: (getenv('RAZORPAY_SECRET') ?: ''),
 
-    // Webhook secret (optional). Prefer storing in environment variable RAZORPAY_WEBHOOK_SECRET.
-    'webhook_secret' => getenv('RAZORPAY_WEBHOOK_SECRET') ?: '',
 ];
-

@@ -1,7 +1,7 @@
 <?php
 // Fill your DB credentials
 define('DB_HOST',     '127.0.0.1');   // e.g., 127.0.0.1
-define('DB_NAME',     'registerlbl');       // database name you created
+define('DB_NAME',     'registerlblnew');       // database name you created
 define('DB_USER',     'root');     // db username
 define('DB_PASSWORD', ''); // db password
 define('DB_CHARSET',  'utf8mb4');

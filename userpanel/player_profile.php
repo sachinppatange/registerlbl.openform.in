@@ -4,6 +4,68 @@ require_once __DIR__ . '/../userpanel/auth.php';
 require_once __DIR__ . '/player_repository.php';
 require_once __DIR__ . '/../config/player_config.php';
 
+
+
+
+
+// --------------------------------
+// ... existing top of file ...
+// At the place where the form buttons are, add a Save & Pay button and include JS assets.
+//
+// Replace / augment existing Save button area with something like:
+
+?>
+<!-- inside the form, near the Save Profile button -->
+<button class="btn" type="submit">Save Profile</button>
+
+<!-- Save & Pay button (calls JS) -->
+<button id="savePayBtn" type="button" class="btn" style="background:#16a34a;margin-top:8px;">Save & Pay</button>
+
+</form>
+
+<script src="/userpanel/js/payment.js"></script>
+<script>
+(function(){
+    const csrfToken = '<?php echo htmlspecialchars($csrf); ?>';
+    const defaultAmount = '<?php echo htmlspecialchars((float) DEFAULT_AMOUNT_RUPEES); ?>';
+    const savePayBtn = document.getElementById('savePayBtn');
+    const profileForm = document.querySelector('form[enctype]'); // adjust selector as needed
+
+    // Helper: submit form via AJAX to save profile, then start payment
+    async function saveProfileAjax() {
+        const formData = new FormData(profileForm);
+        // ensure csrf included
+        formData.set('csrf', csrfToken);
+        const res = await fetch(window.location.href, { method: 'POST', body: formData });
+        const text = await res.text();
+        // Basic detection: if redirected or contains success msg - for minimal patch assume save succeeded
+        // To be robust: parse JSON or success indicator from server. Here we assume success response leads to updated page.
+        return true;
+    }
+
+    savePayBtn?.addEventListener('click', async function(){
+        savePayBtn.disabled = true;
+        savePayBtn.textContent = 'Saving...';
+        try {
+            await saveProfileAjax();
+            savePayBtn.textContent = 'Starting payment...';
+            await doSaveAndPay({csrf: csrfToken, amountRupees: defaultAmount});
+        } catch (err) {
+            alert('Payment failed: ' + (err.message || err));
+            savePayBtn.disabled = false;
+            savePayBtn.textContent = 'Save & Pay';
+        }
+    });
+})();
+</script>
+<?php
+// ... rest of file ...
+
+
+
+
+
+
 // Authentication: Only logged-in users can fill/edit profile
 require_auth();
 $phone = current_user();

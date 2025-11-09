@@ -111,3 +111,62 @@ function is_dob_allowed(?string $dob): bool {
 // if (array_key_exists('dob', $data) && !is_dob_allowed($data['dob'])) return false;
 
 // (rest of the file)
+
+// ----------------------------
+
+// (existing content above remains) - below add new helpers near top or bottom of file
+
+require_once __DIR__ . '/../config/wa_config.php';
+
+/**
+ * Create a payments record (helper).
+ * @param int|null $player_id
+ * @param string $order_id
+ * @param int $amount_paise
+ * @param string $currency
+ * @param array $metadata
+ * @return int|false payment record id
+ */
+function create_payment_record($player_id, $order_id, $amount_paise, $currency = 'INR', $metadata = []) {
+    try {
+        $pdo = db();
+        $stmt = $pdo->prepare("INSERT INTO payments (player_id, order_id, amount, currency, status, metadata, created_at) VALUES (?, ?, ?, ?, 'pending', ?, NOW())");
+        $metaJson = json_encode($metadata, JSON_UNESCAPED_UNICODE);
+        $stmt->execute([$player_id, $order_id, $amount_paise, $currency, $metaJson]);
+        return (int)$pdo->lastInsertId();
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
+/**
+ * Mark payment as paid
+ * @param int $paymentRowId
+ * @param string $gatewayPaymentId
+ * @return bool
+ */
+function mark_payment_paid($paymentRowId, $gatewayPaymentId) {
+    try {
+        $pdo = db();
+        $stmt = $pdo->prepare("UPDATE payments SET payment_id = ?, status = 'paid', updated_at = NOW() WHERE id = ?");
+        return $stmt->execute([$gatewayPaymentId, $paymentRowId]);
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
+/**
+ * Mark payment as failed
+ * @param int $paymentRowId
+ * @param string|null $gatewayPaymentId
+ * @return bool
+ */
+function mark_payment_failed($paymentRowId, $gatewayPaymentId = null) {
+    try {
+        $pdo = db();
+        $stmt = $pdo->prepare("UPDATE payments SET payment_id = ?, status = 'failed', updated_at = NOW() WHERE id = ?");
+        return $stmt->execute([$gatewayPaymentId, $paymentRowId]);
+    } catch (Throwable $e) {
+        return false;
+    }
+}

@@ -8,7 +8,7 @@ require_once __DIR__ . '/../config/player_config.php';
 
 
 
-// --------------------------------
+
 // ... existing top of file ...
 // At the place where the form buttons are, add a Save & Pay button and include JS assets.
 //
@@ -58,7 +58,7 @@ require_once __DIR__ . '/../config/player_config.php';
     });
 })();
 </script>
-<?php
+
 // ... rest of file ...
 
 

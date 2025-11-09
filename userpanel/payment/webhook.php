@@ -11,7 +11,7 @@ $signature = $_SERVER['HTTP_X_RAZORPAY_SIGNATURE'] ?? $_SERVER['HTTP_X-Razorpay-
 
 if (empty(RZP_WEBHOOK_SECRET)) {
     http_response_code(500);
-    echo 'Webhook secret not configured';
+    echo '9f2b3a1e8c4f7a6b0d2e5f8a1f2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0';
     exit;
 }
 

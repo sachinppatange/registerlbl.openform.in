@@ -4,67 +4,13 @@ require_once __DIR__ . '/../userpanel/auth.php';
 require_once __DIR__ . '/player_repository.php';
 require_once __DIR__ . '/../config/player_config.php';
 
-
-
-
-
-
-// ... existing top of file ...
-// At the place where the form buttons are, add a Save & Pay button and include JS assets.
-//
-// Replace / augment existing Save button area with something like:
-
-?>
-<!-- inside the form, near the Save Profile button -->
-<button class="btn" type="submit">Save Profile</button>
-
-<!-- Save & Pay button (calls JS) -->
-<button id="savePayBtn" type="button" class="btn" style="background:#16a34a;margin-top:8px;">Save & Pay</button>
-
-</form>
-
-<script src="/userpanel/js/payment.js"></script>
-<script>
-(function(){
-    const csrfToken = '<?php echo htmlspecialchars($csrf); ?>';
-    const defaultAmount = '<?php echo htmlspecialchars((float) DEFAULT_AMOUNT_RUPEES); ?>';
-    const savePayBtn = document.getElementById('savePayBtn');
-    const profileForm = document.querySelector('form[enctype]'); // adjust selector as needed
-
-    // Helper: submit form via AJAX to save profile, then start payment
-    async function saveProfileAjax() {
-        const formData = new FormData(profileForm);
-        // ensure csrf included
-        formData.set('csrf', csrfToken);
-        const res = await fetch(window.location.href, { method: 'POST', body: formData });
-        const text = await res.text();
-        // Basic detection: if redirected or contains success msg - for minimal patch assume save succeeded
-        // To be robust: parse JSON or success indicator from server. Here we assume success response leads to updated page.
-        return true;
-    }
-
-    savePayBtn?.addEventListener('click', async function(){
-        savePayBtn.disabled = true;
-        savePayBtn.textContent = 'Saving...';
-        try {
-            await saveProfileAjax();
-            savePayBtn.textContent = 'Starting payment...';
-            await doSaveAndPay({csrf: csrfToken, amountRupees: defaultAmount});
-        } catch (err) {
-            alert('Payment failed: ' + (err.message || err));
-            savePayBtn.disabled = false;
-            savePayBtn.textContent = 'Save & Pay';
-        }
-    });
-})();
-</script>
-
-// ... rest of file ...
-
-
-
-
-
+// Optional payment config (fallback to Rs.1 if missing)
+if (file_exists(__DIR__ . '/../config/payment_config.php')) {
+    require_once __DIR__ . '/../config/payment_config.php';
+} else {
+    if (!defined('DEFAULT_AMOUNT_RUPEES')) define('DEFAULT_AMOUNT_RUPEES', 1.00);
+    if (!defined('RAZORPAY_CURRENCY')) define('RAZORPAY_CURRENCY', 'INR');
+}
 
 // Authentication: Only logged-in users can fill/edit profile
 require_auth();
@@ -345,6 +291,7 @@ function h(?string $v): string { return htmlspecialchars((string)$v, ENT_QUOTES,
         input[type="file"] { padding:0;}
         .row { margin-bottom:14px;}
         .btn { width:100%; background:var(--primary); color:#fff; border-radius:10px; padding:13px 0; font-size:16px; font-weight:600; border:0; cursor:pointer; margin-top:14px;}
+        .btn.savepay { background:#16a34a; margin-top:8px;}
         .msg { margin-bottom:10px; padding:8px; border-radius:8px; font-size:14px;}
         .msg.success { background:#e0fce0; color:#166534;}
         .msg.error { background:#fee2e2; color:#7f1d1d;}
@@ -394,7 +341,7 @@ function h(?string $v): string { return htmlspecialchars((string)$v, ENT_QUOTES,
         <div class="sub">Fill your details for the Latur Badminton League registration</div>
         <?php if($msg_success): ?><div class="msg success"><?php echo h($msg_success);?></div><?php endif;?>
         <?php if($msg_error): ?><div class="msg error"><?php echo h($msg_error);?></div><?php endif;?>
-        <form method="post" enctype="multipart/form-data" autocomplete="off" style="text-align:left;">
+        <form id="profileForm" method="post" enctype="multipart/form-data" autocomplete="off" style="text-align:left;">
             <input type="hidden" name="csrf" value="<?php echo h($csrf); ?>">
 
             <div class="row">
@@ -481,8 +428,75 @@ function h(?string $v): string { return htmlspecialchars((string)$v, ENT_QUOTES,
                 <label for="terms">I confirm all information is correct and accept all terms and conditions.</label>
             </div>
             <button class="btn" type="submit">Save Profile</button>
+
+            <!-- Save & Pay button: uses JS to save profile via AJAX then initiate payment -->
+            <button id="savePayBtn" class="btn savepay" type="button">Save &amp; Pay</button>
         </form>
     </div>
 </div>
+
+<!-- Include payment helper JS (expects /userpanel/js/payment.js to exist) -->
+<script src="../userpanel/js/payment.js"></script>
+<script>
+(function(){
+    const csrfToken = '<?php echo h($csrf); ?>';
+    const defaultAmount = '<?php echo h((string) (defined("DEFAULT_AMOUNT_RUPEES") ? DEFAULT_AMOUNT_RUPEES : 1.00)); ?>';
+    const savePayBtn = document.getElementById('savePayBtn');
+    const profileForm = document.getElementById('profileForm');
+
+    async function saveProfileAjax() {
+        const formData = new FormData(profileForm);
+        // Ensure CSRF included
+        formData.set('csrf', csrfToken);
+
+        const res = await fetch(window.location.href, {
+            method: 'POST',
+            body: formData,
+            credentials: 'same-origin'
+        });
+
+        const text = await res.text();
+        // Basic heuristic: server sets "Player profile saved successfully!" on success
+        if (res.ok && text.indexOf('Player profile saved successfully!') !== -1) {
+            return { ok: true };
+        }
+
+        // Try to extract server error message
+        const errMatch = text.match(/<div class="msg error">([\s\S]*?)<\/div>/);
+        if (errMatch && errMatch[1]) {
+            // Strip HTML tags
+            const tmp = document.createElement('div');
+            tmp.innerHTML = errMatch[1];
+            return { ok: false, error: tmp.textContent.trim() || 'Failed to save profile' };
+        }
+
+        return { ok: false, error: 'Failed to save profile' };
+    }
+
+    savePayBtn?.addEventListener('click', async function(){
+        savePayBtn.disabled = true;
+        savePayBtn.textContent = 'Saving...';
+        try {
+            const saveRes = await saveProfileAjax();
+            if (!saveRes.ok) {
+                alert('Save failed: ' + (saveRes.error || 'Unknown error'));
+                savePayBtn.disabled = false;
+                savePayBtn.textContent = 'Save & Pay';
+                return;
+            }
+
+            savePayBtn.textContent = 'Starting payment...';
+            // call doSaveAndPay from payment.js
+            await doSaveAndPay({ csrf: csrfToken, amountRupees: defaultAmount });
+            // doSaveAndPay will redirect on success
+        } catch (err) {
+            console.error(err);
+            alert('Payment initialization failed: ' + (err.message || err));
+            savePayBtn.disabled = false;
+            savePayBtn.textContent = 'Save & Pay';
+        }
+    });
+})();
+</script>
 </body>
 </html>

@@ -1,8 +1,8 @@
 <?php
 // Fill your DB credentials
 define('DB_HOST',     '127.0.0.1');   // e.g., 127.0.0.1
-define('DB_NAME',     'u750208840_lbldb');       // database name you created
-define('DB_USER',     'u750208840_lbluser');     // db username
+define('DB_NAME',     'u750208840_registerlbldb');       // database name you created
+define('DB_USER',     'u750208840_registerlbluse');     // db username
 define('DB_PASSWORD', 'Latur@413512#'); // db password
 define('DB_CHARSET',  'utf8mb4');
 

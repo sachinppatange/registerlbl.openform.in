@@ -1,0 +1,36 @@
+data:
+- config/app_config.php
+- config/wa_config.php
+- config/player_config.php
+
+- adminpanel/admin_auth.php
+- adminpanel/admin_dashboard.php
+- adminpanel/admin_login.php
+- adminpanel/admin_logout.php
+- adminpanel/whatsapp.php
+- adminpanel/user_repository.php
+- adminpanel/player_repository.php         # Player CRUD, status, fetch/update logic
+- adminpanel/player_dashboard.php          # Admin UI: list, edit, accept/reject, export
+- adminpanel/player_edit.php               # Admin: edit/update player info form
+- adminpanel/player_view.php
+- adminpanel/player_status.php             # Admin: accept/reject action endpoint
+- adminpanel/player_export_excel.php       # Admin: export player list to Excel
+- adminpanel/player_export_pdf.php         # Admin: export player list to PDF
+- adminpanel/storage/logs/whatsapp.log
+
+- userpanel/auth.php
+- userpanel/dashboard.php
+- userpanel/login.php
+- userpanel/logout.php
+- userpanel/signup.php
+- userpanel/whatsapp.php
+- userpanel/player_repository.php
+- userpanel/user_repository.php
+- userpanel/player_profile.php
+- userpanel/dashboard.php
+- userpanel/storage/logs/whatsapp.log
+
+- public/index.php
+- public/assets/
+
+- README.md

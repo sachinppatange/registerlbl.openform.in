@@ -142,6 +142,7 @@ ngrok http 80
 ├── storage/
 │   └── logs/
 │       └── payment_webhook.log             # Webhook event logs (auto-created)
+├── test_payment_config.php                 # Configuration verification script
 └── README_PAYMENT.md                       # This file
 ```
 
@@ -173,6 +174,22 @@ All webhook events are logged to `storage/logs/payment_webhook.log` with minimal
 
 ## Testing
 
+### Verify Configuration
+
+Before testing the payment flow, verify your setup is correct:
+
+```bash
+php test_payment_config.php
+```
+
+This script will check:
+- Composer dependencies installed
+- Environment variables set
+- Database connection
+- Payments table exists
+- All required files present
+- RazorpayClient initialization
+
 ### Test with Razorpay Test Mode
 
 1. Use test API keys (starting with `rzp_test_`)
@@ -190,6 +207,9 @@ All webhook events are logged to `storage/logs/payment_webhook.log` with minimal
 ### Test Locally
 
 ```bash
+# Verify configuration first
+php test_payment_config.php
+
 # Start local server
 php -S localhost:8000
 

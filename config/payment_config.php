@@ -1,23 +1,22 @@
 <?php
-// Razorpay payment configuration (reads from env or local override)
+// Razorpay payment configuration - read from environment variables
+// Do NOT commit secrets to repo. Set RZP_KEY_ID and RZP_KEY_SECRET in environment.
 
-$rzp_key_id = getenv('rzp_live_D53J9UWwYtGimn') ?: null;
-$rzp_key_secret = getenv('w0SnqzH2SOOIc0gnUR7cYO3r') ?: null;
-$rzp_webhook_secret = getenv('9f2b3a1e8c4f7a6b0d2e5f8a1f2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0') ?: null;
+define('RZP_KEY_ID', getenv('rzp_live_D53J9UWwYtGimn') ?: '');
+define('RZP_KEY_SECRET', getenv('w0SnqzH2SOOIc0gnUR7cYO3r') ?: '');
+define('RZP_WEBHOOK_SECRET', getenv('9f2b3a1e8c4f7a6b0d2e5f8a1f2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0') ?: '');
 
-// If env not set, allow local override file (gitignored)
-$local = __DIR__ . '/payment_local.php';
-if ((!$rzp_key_id || !$rzp_key_secret) && file_exists($local)) {
-    require_once $local;
-    // payment_local.php should define RZP_KEY_ID etc.
-    $rzp_key_id = defined('RZP_KEY_ID') ? RZP_KEY_ID : $rzp_key_id;
-    $rzp_key_secret = defined('RZP_KEY_SECRET') ? RZP_KEY_SECRET : $rzp_key_secret;
-    $rzp_webhook_secret = defined('RZP_WEBHOOK_SECRET') ? RZP_WEBHOOK_SECRET : $rzp_webhook_secret;
-}
+define('RAZORPAY_CURRENCY', getenv('INR') ?: 'INR');
+// Default amount in rupees (integer or float). Default Rs.1 as requested.
+define('DEFAULT_AMOUNT_RUPEES', (float) (getenv('1.00') ?: 1.00));
 
-define('RZP_KEY_ID', $rzp_key_id ?: '');
-define('RZP_KEY_SECRET', $rzp_key_secret ?: '');
-define('RZP_WEBHOOK_SECRET', $rzp_webhook_secret ?: '');
+// Optional: log file for payment webhooks (non-sensitive summary only)
+define('PAYMENT_LOG_DIR', __DIR__ . '/../storage/logs');
+define('PAYMENT_WEBHOOK_LOG', PAYMENT_LOG_DIR . '/payment_webhook.log');
 
-define('RAZORPAY_CURRENCY', getenv('RAZORPAY_CURRENCY') ?: 'INR');
-define('DEFAULT_AMOUNT_RUPEES', (float) (getenv('DEFAULT_AMOUNT_RUPEES') ?: 1.00));
+
+
+
+
+
+

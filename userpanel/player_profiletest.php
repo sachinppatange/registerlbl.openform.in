@@ -2,12 +2,10 @@
 /**
  * userpanel/player_profiletest.php
  *
- * Improved test page to create a Razorpay order for ₹1 (100 paise) and open Checkout.
- * - Reads keys from ../config/razorpay_config.php or environment variables.
- * - Shows helpful debug info if keys are missing.
- * - Auto-opens Checkout when both order and public key are available.
- *
- * WARNING: Use test keys (rzp_test_...) for development. Do NOT commit live secrets.
+ * Minimal test page to create a Razorpay order for ₹1 (100 paise) and open Checkout.
+ * - Reads keys from ../config/razorpay_config.php (preferred) or env vars.
+ * - Use test keys (rzp_test_...) for dev. Do NOT commit live secrets to git.
+ * - Remove this file after testing.
  */
 
 session_start();
@@ -22,6 +20,10 @@ if (file_exists($configPath)) {
 // fallback to environment variables
 $keyId     = getenv('RAZORPAY_KEY_ID') ?: ($config['key_id'] ?? '');
 $keySecret = getenv('RAZORPAY_KEY_SECRET') ?: ($config['key_secret'] ?? '');
+
+// Ensure logs dir
+$logDir = __DIR__ . '/storage/logs';
+if (!is_dir($logDir)) @mkdir($logDir, 0755, true);
 
 // debug log helper
 function rp_log($msg) {

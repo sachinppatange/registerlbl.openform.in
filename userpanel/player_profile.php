@@ -233,9 +233,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && hash_equals($csrf, $_POST['csrf'] ?
 
     // If user requested to start payment after successful save, prepare JS trigger
     if ($start_payment_requested && empty($msg_error) && !empty($msg_success)) {
-        // derive amount from posted field (in rupees) or use a default (199)
-        $amt_rupees = (float)str_replace(',', '.', ($_POST['payment_amount'] ?? '199'));
-        $start_payment_amount_paise = max(1, (int) round($amt_rupees * 100));
+        // derive amount from posted field (in rupees) or use a default (1 for demo)
+        $amt_rupees = (float)str_replace(',', '.', ($_POST['payment_amount'] ?? '1'));
+        // Enforce minimum 100 paise (₹1) to avoid 1 paise issues in demo
+        $start_payment_amount_paise = max(100, (int) round($amt_rupees * 100));
         $should_start_payment = true;
     }
 }
@@ -272,8 +273,8 @@ $playing_years_options['More than 20 Years'] = 'More than 20 Years';
 // Helper for escaping output
 function h(?string $v): string { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
 
-// Default payment amount (rupees) — change as needed or make configurable
-$default_payment_amount = $player['registration_fee'] ?? 199; // rupees
+// Default payment amount (rupees) — demo uses 1 INR
+$default_payment_amount = 1; // rupees (demo)
 
 ?>
 <!DOCTYPE html>
@@ -342,7 +343,7 @@ $default_payment_amount = $player['registration_fee'] ?? 199; // rupees
         btn.innerText = 'Saving...';
         const form = document.getElementById('profileForm');
         document.getElementById('start_payment').value = '1';
-        // Ensure amount field exists; if empty, set default
+        // Ensure amount field exists; if empty, set demo default (1 INR)
         const amt = document.getElementById('payment_amount');
         if (!amt || !amt.value) {
             document.getElementById('payment_amount').value = '<?php echo h($default_payment_amount); ?>';
@@ -455,8 +456,8 @@ $default_payment_amount = $player['registration_fee'] ?? 199; // rupees
             </div>
 
             <!-- Primary actions -->
-            <!-- <button class="btn" type="submit">Save Profile</button> -->
-            <button class="btn secondary" type="button" id="savePayBtn" onclick="onSaveAndPayClick(this)">Save &amp; Pay</button>
+            <button class="btn" type="submit">Save Profile</button>
+            <button class="btn secondary" type="button" id="savePayBtn" onclick="onSaveAndPayClick(this)">Save &amp; Pay (₹1 Demo)</button>
         </form>
     </div>
 </div>

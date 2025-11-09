@@ -18,6 +18,22 @@ $msg_success = '';
 $should_start_payment = false;
 $start_payment_amount_paise = 0;
 
+// If redirected from POST flow we may have flash messages
+if (!empty($_SESSION['flash_msg_success'])) {
+    $msg_success = $_SESSION['flash_msg_success'];
+    unset($_SESSION['flash_msg_success']);
+}
+if (!empty($_SESSION['flash_msg_error'])) {
+    $msg_error = $_SESSION['flash_msg_error'];
+    unset($_SESSION['flash_msg_error']);
+}
+
+// If redirected with start_payment GET params, prepare JS trigger
+if (isset($_GET['start_payment']) && $_GET['start_payment'] === '1' && isset($_GET['amount_paise'])) {
+    $should_start_payment = true;
+    $start_payment_amount_paise = max(100, (int)$_GET['amount_paise']); // enforce min ₹1 (100 paise)
+}
+
 // Load existing player profile if available
 $player = player_get_by_phone($phone) ?? ['mobile' => $phone];
 
@@ -52,7 +68,7 @@ function compute_age_group_from_dob(?string $dob): string {
 $max_dob = '1995-11-01'; // 1 Nov 1995
 $min_dob = '1945-01-01'; // optional lower bound
 
-// Check if the form requested a payment start after save
+// Check if the form requested a payment start after save (POST)
 $start_payment_requested = (isset($_POST['start_payment']) && trim($_POST['start_payment']) === '1');
 
 // Handle form submit
@@ -231,13 +247,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && hash_equals($csrf, $_POST['csrf'] ?
         }
     }
 
-    // If user requested to start payment after successful save, prepare JS trigger
+    // If user requested to start payment after successful save, redirect to same page with start params
     if ($start_payment_requested && empty($msg_error) && !empty($msg_success)) {
-        // derive amount from posted field (in rupees) or use a default (1 for demo)
+        // derive amount from posted field (in rupees) or use demo default (1)
         $amt_rupees = (float)str_replace(',', '.', ($_POST['payment_amount'] ?? '1'));
         // Enforce minimum 100 paise (₹1) to avoid 1 paise issues in demo
         $start_payment_amount_paise = max(100, (int) round($amt_rupees * 100));
-        $should_start_payment = true;
+
+        // store flash message so after redirect user sees confirmation
+        $_SESSION['flash_msg_success'] = $msg_success;
+
+        // Redirect to self with start_payment=1 and amount_paise to reliably trigger client JS after a GET
+        header('Location: /userpanel/player_profile.php?start_payment=1&amount_paise=' . urlencode((int)$start_payment_amount_paise));
+        exit;
     }
 }
 
@@ -455,8 +477,7 @@ $default_payment_amount = 1; // rupees (demo)
                 <label for="terms">I confirm all information is correct and accept all terms and conditions.</label>
             </div>
 
-            <!-- Primary actions -->
-            <button class="btn" type="submit">Save Profile</button>
+            <!-- Primary action: only Save & Pay (no separate Save Profile button) -->
             <button class="btn secondary" type="button" id="savePayBtn" onclick="onSaveAndPayClick(this)">Save &amp; Pay (₹1 Demo)</button>
         </form>
     </div>

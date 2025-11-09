@@ -49,7 +49,21 @@ function compute_age_group_from_dob(?string $dob): string {
 $max_dob = '1995-11-01'; // 1 Nov 1995
 $min_dob = '1945-01-01'; // optional lower bound
 
-// Handle form submit (server-side save via normal POST still supported)
+// --- New: fetch latest payment for this player (if any) ---
+$latestPayment = null;
+try {
+    if (!empty($player['id'])) {
+        $pdo = db();
+        $stmt = $pdo->prepare("SELECT * FROM payments WHERE player_id = ? ORDER BY created_at DESC LIMIT 1");
+        $stmt->execute([$player['id']]);
+        $latestPayment = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    }
+} catch (Throwable $e) {
+    // ignore; do not break page if payments table missing
+    error_log('[player_profile] payments lookup error: ' . $e->getMessage());
+}
+
+// Handle form submit
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && hash_equals($csrf, $_POST['csrf'] ?? '')) {
 
     // Basic required fields to validate (server-side)
@@ -222,6 +236,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && hash_equals($csrf, $_POST['csrf'] ?
                     $player = player_get_by_phone($phone) ?? $player;
                 }
             }
+
+            // After save, refresh latest payment (in case player_id was created now)
+            try {
+                if (!empty($player['id'])) {
+                    $pdo = db();
+                    $stmt = $pdo->prepare("SELECT * FROM payments WHERE player_id = ? ORDER BY created_at DESC LIMIT 1");
+                    $stmt->execute([$player['id']]);
+                    $latestPayment = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+                }
+            } catch (Throwable $e) {
+                error_log('[player_profile] payments lookup error after save: ' . $e->getMessage());
+            }
         }
     }
 }
@@ -258,6 +284,42 @@ $playing_years_options['More than 20 Years'] = 'More than 20 Years';
 // Helper for escaping output
 function h(?string $v): string { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
 
+// Helper to render a payment status badge
+function render_payment_status_badge(?array $payment): string {
+    if (empty($payment)) return '';
+    $status = $payment['status'] ?? '';
+    $amount = isset($payment['amount']) ? number_format(((int)$payment['amount']) / 100, 2) : '';
+    $order = $payment['order_id'] ?? '';
+    $txn = $payment['payment_id'] ?? '';
+    $when = $payment['updated_at'] ?? $payment['created_at'] ?? '';
+    $badgeColor = 'background:#fef3c7;color:#92400e;'; // pending - amber
+    $label = 'Pending';
+    if ($status === 'paid') {
+        $badgeColor = 'background:#dcfce7;color:#014d2f;'; // green
+        $label = 'Paid';
+    } elseif ($status === 'failed') {
+        $badgeColor = 'background:#fee2e2;color:#7f1d1d;'; // red
+        $label = 'Failed';
+    }
+    $html = '<div style="margin:12px 0;padding:10px;border-radius:8px;text-align:left;">';
+    $html .= '<div style="display:flex;justify-content:space-between;align-items:center;">';
+    $html .= '<div><strong>Payment Status:</strong> <span style="display:inline-block;padding:6px 10px;border-radius:999px;' . $badgeColor . 'margin-left:8px;">' . h($label) . '</span></div>';
+    $html .= '<div style="color:#6b7280;font-size:13px;">' . h($when) . '</div>';
+    $html .= '</div>';
+    $html .= '<div style="margin-top:8px;color:#374151;font-size:14px;">';
+    if ($amount !== '') $html .= 'Amount: ₹' . h($amount) . ' &nbsp; ';
+    if ($order) $html .= 'Order: ' . h($order) . ' &nbsp; ';
+    if ($txn) $html .= 'Txn: ' . h($txn) . ' &nbsp; ';
+    $html .= '</div>';
+    // Add link to receipt page if payment_id present
+    if (!empty($txn)) {
+        $html .= '<div style="margin-top:8px;"><a href="payment/receipt.php?payment_id=' . urlencode($txn) . '">View receipt</a></div>';
+    } elseif (!empty($order)) {
+        $html .= '<div style="margin-top:8px;"><a href="payment/receipt.php?order_id=' . urlencode($order) . '">View receipt</a></div>';
+    }
+    $html .= '</div>';
+    return $html;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -310,6 +372,12 @@ function h(?string $v): string { return htmlspecialchars((string)$v, ENT_QUOTES,
         </div>
         <h1>Player Registration / Profile</h1>
         <div class="sub">Fill your details for the Latur Badminton League registration</div>
+
+        <!-- Display latest payment status if available -->
+        <?php
+            echo render_payment_status_badge($latestPayment);
+        ?>
+
         <?php if($msg_success): ?><div class="msg success"><?php echo h($msg_success);?></div><?php endif;?>
         <?php if($msg_error): ?><div class="msg error"><?php echo h($msg_error);?></div><?php endif;?>
         <!-- Prevent default form submission; Save & Pay will handle save + payment -->

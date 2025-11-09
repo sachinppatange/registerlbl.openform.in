@@ -4,14 +4,6 @@ require_once __DIR__ . '/../userpanel/auth.php';
 require_once __DIR__ . '/player_repository.php';
 require_once __DIR__ . '/../config/player_config.php';
 
-// Optional payment config (fallback to Rs.1 if missing)
-if (file_exists(__DIR__ . '/../config/payment_config.php')) {
-    require_once __DIR__ . '/../config/payment_config.php';
-} else {
-    if (!defined('DEFAULT_AMOUNT_RUPEES')) define('DEFAULT_AMOUNT_RUPEES', 1.00);
-    if (!defined('RAZORPAY_CURRENCY')) define('RAZORPAY_CURRENCY', 'INR');
-}
-
 // Authentication: Only logged-in users can fill/edit profile
 require_auth();
 $phone = current_user();
@@ -57,7 +49,7 @@ function compute_age_group_from_dob(?string $dob): string {
 $max_dob = '1995-11-01'; // 1 Nov 1995
 $min_dob = '1945-01-01'; // optional lower bound
 
-// Handle form submit (server-side save via normal POST still supported if needed)
+// Handle form submit (server-side save via normal POST still supported)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && hash_equals($csrf, $_POST['csrf'] ?? '')) {
 
     // Basic required fields to validate (server-side)
@@ -306,27 +298,6 @@ function h(?string $v): string { return htmlspecialchars((string)$v, ENT_QUOTES,
             .btn { padding:10px 0; font-size:14px;}
         }
     </style>
-    <script>
-    function updateAgeGroup() {
-        const dobEl = document.getElementById('dob');
-        const dob = dobEl.value;
-        const today = new Date();
-        if (!dob) return;
-        const birthDate = new Date(dob);
-        let age = today.getFullYear() - birthDate.getFullYear();
-        const m = today.getMonth() - birthDate.getMonth();
-        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-            age--;
-        }
-        let group = '';
-        if (age >= 30 && age <= 40) group = '30 to 40';
-        else if (age >= 41 && age <= 45) group = '41 to 45';
-        else if (age >= 46 && age <= 50) group = '46 to 50';
-        else if (age >= 51 && age <= 55) group = '51 to 55';
-        else if (age > 55) group = 'Above 55';
-        document.getElementById('age_group').value = group;
-    }
-    </script>
 </head>
 <body>
 <div class="wrap">
@@ -429,8 +400,7 @@ function h(?string $v): string { return htmlspecialchars((string)$v, ENT_QUOTES,
                 <label for="terms">I confirm all information is correct and accept all terms and conditions.</label>
             </div>
 
-            <!-- Removed plain "Save Profile" submit button.
-                 Save & Pay will perform save (via AJAX) and then initiate payment. -->
+            <!-- Single action: Save & Pay -->
             <button id="savePayBtn" class="btn savepay" type="button">Save &amp; Pay</button>
         </form>
     </div>
@@ -439,21 +409,40 @@ function h(?string $v): string { return htmlspecialchars((string)$v, ENT_QUOTES,
 <!-- Load payment helper JS from same folder (page is /userpanel/) -->
 <script src="js/payment.js"></script>
 <script>
+function updateAgeGroup() {
+    const dobEl = document.getElementById('dob');
+    const dob = dobEl.value;
+    const today = new Date();
+    if (!dob) return;
+    const birthDate = new Date(dob);
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+    }
+    let group = '';
+    if (age >= 30 && age <= 40) group = '30 to 40';
+    else if (age >= 41 && age <= 45) group = '41 to 45';
+    else if (age >= 46 && age <= 50) group = '46 to 50';
+    else if (age >= 51 && age <= 55) group = '51 to 55';
+    else if (age > 55) group = 'Above 55';
+    document.getElementById('age_group').value = group;
+}
+
 (function(){
     const csrfToken = '<?php echo h($csrf); ?>';
     const defaultAmount = '<?php echo h((string) (defined("DEFAULT_AMOUNT_RUPEES") ? DEFAULT_AMOUNT_RUPEES : 1.00)); ?>';
     const savePayBtn = document.getElementById('savePayBtn');
     const profileForm = document.getElementById('profileForm');
 
-    // Improved client-side save routine: validate, then send form via AJAX
+    // Save profile via AJAX then initiate payment
     async function saveProfileAjax() {
-        // Use native validation first
+        // Client-side HTML5 validation
         if (!profileForm.reportValidity()) {
             return { ok: false, error: 'Please fill required fields' };
         }
 
         const formData = new FormData(profileForm);
-        // Ensure CSRF included
         formData.set('csrf', csrfToken);
 
         const res = await fetch(window.location.href, {
@@ -463,23 +452,21 @@ function h(?string $v): string { return htmlspecialchars((string)$v, ENT_QUOTES,
         });
 
         const text = await res.text();
-        // Basic heuristic: server sets "Player profile saved successfully!" on success
         if (res.ok && text.indexOf('Player profile saved successfully!') !== -1) {
             return { ok: true };
         }
 
-        // Try to extract server error message
+        // Try extract server-side error message from HTML
         const errMatch = text.match(/<div class="msg error">([\s\S]*?)<\/div>/);
         if (errMatch && errMatch[1]) {
-            // Strip HTML tags
             const tmp = document.createElement('div');
             tmp.innerHTML = errMatch[1];
             return { ok: false, error: tmp.textContent.trim() || 'Failed to save profile' };
         }
 
-        // If server returned JSON error (in case of API path), try parse
+        // Try parse JSON error if returned
         try {
-            const j = JSON.parse(text);
+            const j = JSON.parse(text || '{}');
             if (j && j.error) return { ok: false, error: j.error };
         } catch (e) {
             // ignore parse error
@@ -501,9 +488,19 @@ function h(?string $v): string { return htmlspecialchars((string)$v, ENT_QUOTES,
             }
 
             savePayBtn.textContent = 'Starting payment...';
-            // call doSaveAndPay from payment.js (must be globally exposed)
-            await doSaveAndPay({ csrf: csrfToken, amountRupees: defaultAmount, prefillName: document.getElementById('full_name').value });
-            // doSaveAndPay will redirect on success
+            // Ensure payment.js exposes doSaveAndPay on window
+            if (typeof doSaveAndPay !== 'function') {
+                throw new Error('Payment helper not loaded (doSaveAndPay not found).');
+            }
+
+            await doSaveAndPay({
+                csrf: csrfToken,
+                amountRupees: defaultAmount,
+                prefillName: document.getElementById('full_name').value
+            });
+            // doSaveAndPay should redirect on success; if it returns, re-enable button
+            savePayBtn.disabled = false;
+            savePayBtn.textContent = 'Save & Pay';
         } catch (err) {
             console.error(err);
             alert('Payment initialization failed: ' + (err.message || err));

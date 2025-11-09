@@ -5,7 +5,7 @@
 
 $rzp_key_id = getenv('rzp_live_D53J9UWwYtGimn') ?: null;
 $rzp_key_secret = getenv('w0SnqzH2SOOIc0gnUR7cYO3r') ?: null;
-$rzp_webhook_secret = getenv('RZP_WEBHOOK_SECRET') ?: null;
+$rzp_webhook_secret = getenv('9f2b3a1e8c4f7a6b0d2e5f8a1f2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0') ?: null;
 
 // Local override (gitignored) if env not set
 $local = __DIR__ . '/payment_local.php';

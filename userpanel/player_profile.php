@@ -334,7 +334,7 @@ function render_payment_status_badge(?array $payment): string {
         body { background:var(--bg); font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; color:var(--text); margin:0;}
         .wrap { display:grid; place-items:center; min-height:100dvh; padding:12px;}
         .card { width:100%; max-width:430px; background:var(--card); border-radius:13px; box-shadow:0 4px 16px #2563eb14; padding:28px 18px; text-align:center;}
-        .logo { width: 82px; height: 82px; margin:0 auto 10px auto; border-radius:50%; background:#fff; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 10px rgba(37,99,235,0.10); overflow:hidden; }
+        .logo { width: 82px; height: 82px; margin:0 auto 10px auto; border-radius:50%; background:#fff; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 10px rgba(37,99,235,0);}
         .logo img { width: 63px; height: 63px; }
         .topbar { display:flex; justify-content:flex-start; align-items:center; margin-bottom:10px; }
         .link { text-decoration:none; color:#fff; background:#0f172a; padding:8px 16px; border-radius:10px; font-size:15px; font-weight:600; margin-right:12px; }
@@ -476,6 +476,74 @@ function render_payment_status_badge(?array $payment): string {
 
 <!-- Load payment helper JS from same folder (page is /userpanel/) -->
 <script src="js/payment.js"></script>
+
+<!-- Fallback helper: if payment.js didn't define doSaveAndPay, provide a safe fallback
+     This must be loaded AFTER payment.js so the real helper has priority. -->
+<script>
+(function(){
+  if (typeof window.doSaveAndPay === 'function') {
+    console.info('Payment helper loaded.');
+    return;
+  }
+  console.warn('Payment helper not loaded — registering fallback doSaveAndPay()');
+
+  window.doSaveAndPay = function(opts) {
+    try {
+      var form = document.getElementById('profileForm');
+      if (!form) { alert('Form not found'); return; }
+
+      // Ensure hidden start_payment exists and set it
+      var start = document.getElementById('start_payment');
+      if (!start) {
+        start = document.createElement('input');
+        start.type = 'hidden';
+        start.name = 'start_payment';
+        start.id = 'start_payment';
+        form.appendChild(start);
+      }
+      start.value = '1';
+
+      // Ensure csrf present
+      var csrf = form.querySelector('input[name="csrf"]');
+      if (!csrf) {
+        csrf = document.createElement('input');
+        csrf.type = 'hidden';
+        csrf.name = 'csrf';
+        csrf.value = '<?php echo h($csrf); ?>';
+        form.appendChild(csrf);
+      }
+
+      // remove onsubmit blocking (if any)
+      try { form.onsubmit = null; } catch(e){}
+
+      // provide UI feedback and submit the form normally to let server create order and render checkout
+      var btn = document.getElementById('savePayBtn');
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Opening payment...';
+      }
+
+      // Submit the form using native submit (bypasses any preventDefault in event listeners)
+      form.submit();
+    } catch (err) {
+      console.error('doSaveAndPay fallback error:', err);
+      alert('Payment initialization failed. See console for details.');
+      var btn = document.getElementById('savePayBtn');
+      if (btn) { btn.disabled = false; btn.textContent = 'Save & Pay'; }
+    }
+  };
+
+  // Ensure Save & Pay button invokes the helper
+  var btn = document.getElementById('savePayBtn');
+  if (btn) {
+    btn.addEventListener('click', function(e){
+      e.preventDefault();
+      window.doSaveAndPay();
+    });
+  }
+})();
+</script>
+
 <script>
 function updateAgeGroup() {
     const dobEl = document.getElementById('dob');
@@ -503,7 +571,7 @@ function updateAgeGroup() {
     const savePayBtn = document.getElementById('savePayBtn');
     const profileForm = document.getElementById('profileForm');
 
-    // Save profile via AJAX then initiate payment
+    // Save profile via AJAX then initiate payment (keeps UX snappy)
     async function saveProfileAjax() {
         // Client-side HTML5 validation
         if (!profileForm.reportValidity()) {
@@ -520,6 +588,7 @@ function updateAgeGroup() {
         });
 
         const text = await res.text();
+
         if (res.ok && text.indexOf('Player profile saved successfully!') !== -1) {
             return { ok: true };
         }
@@ -556,17 +625,20 @@ function updateAgeGroup() {
             }
 
             savePayBtn.textContent = 'Starting payment...';
-            // Ensure payment.js exposes doSaveAndPay on window
+
+            // Ensure payment helper exists (fallback doSaveAndPay defined above will handle it)
             if (typeof doSaveAndPay !== 'function') {
                 throw new Error('Payment helper not loaded (doSaveAndPay not found).');
             }
 
+            // call the helper — it may perform client-side order creation or submit form to server
             await doSaveAndPay({
                 csrf: csrfToken,
                 amountRupees: defaultAmount,
                 prefillName: document.getElementById('full_name').value
             });
-            // doSaveAndPay should redirect on success; if it returns, re-enable button
+
+            // doSaveAndPay should redirect or open checkout; if it returns, reset UI
             savePayBtn.disabled = false;
             savePayBtn.textContent = 'Save & Pay';
         } catch (err) {
@@ -578,5 +650,6 @@ function updateAgeGroup() {
     });
 })();
 </script>
+
 </body>
 </html>

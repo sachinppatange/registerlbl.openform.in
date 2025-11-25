@@ -102,47 +102,11 @@ $student=getStudentRegById($_GET['studmaxid']);
     <div class="container">
         <div class="card p-4 m-3">
             <div class="row">
-                <p style="color:red; font-size:14px;"><b>फॉर्म भरण्याआधी माहिती पत्रक काळजीपूर्वक वाचा. त्या शिवाय फॉर्म
-                        भरू नका. PLEASE READ INFORMATION BULLETIN BEFORE FILLING THE REGISTRATION FORM.</b></p>
                 <div class="col-md-6">
-                    <center><img class="mb-4" src="../assets/img/logo.jpg" width="20%" alt="Logo"></center>
-                    <center>
-                        <h4 style="color: #b1a8a8; font-size:14px;">Atharv Media - Online Registration Platform</h4>
-                    </center>
-                    <p style="color: #000; font-size:14px;" align="center"><b>Smart Registration for Schools & Colleges</b></p>
+                    
+                    
+                    
 
-                    <div class="p-1" style="background-color:#f6c13d;">
-                        <center>
-                            <h6><b>महत्वाच्या सूचना </b></h6>
-                        </center>
-                    </div>
-                    <div class="rule">
-                        <ol type="1">
-                            <li>वेबसाईट वरील नोंदणी प्रक्रिया बाबतीचे नोंदणी कार्यक्रम वेळापत्रक तसेच माहिती पुस्तक
-                                वाचून घ्यावे.</li>
-                            <li>नोंदणी फॉर्म भरताना CASTE , CATEGORY ,समांतर आरक्षण , इत्यादी माहिती काळजीपूर्वक भरावी .
-                                <br> CATEGORY प्रमाणपत्र उपलबध नसल्यास सेतू मधील प्रस्ताव केल्याची पावती जोडावी .
-                            </li>
-                            <li>पहिली निवड यादी जाहीर झाल्यानंतर समांतर आरक्षण मधील दुरुस्ती कोणत्याही सबबी खाली
-                                स्वीकारली जाणार नाही.</li>
-                            <li>नोंदणी केलेल्या माहितीत गुणवाढ व्यतिरिक्त इतर कोणतीही दुरुस्ती केली जाणार नाही. याबाबत
-                                कोणीही अर्ज करू नये.</li>
-                            <li> अर्जामधील दुरुस्त्या या दिलेल्या नोंदणी कार्यक्रम वेळापत्रकाप्रमाणेच स्वीकारल्या जातील.
-                                या नंतर आलेल्या अर्जाचा विचार केला जाणार नाही तरी विद्यार्थ्यांनी वेळापत्रकाचे
-                                काटेकोरपणे पालन करावे.</li>
-                            <li> नोंदणी फीस भरल्याशिवाय CONFIRMATION PAGE प्रिंट करता येणार नाही.</li>
-                        </ol>
-                    </div>
-
-                    <!-- <div class="p-1" style="background-color:#1cc688;">
-                        <center>
-                            <h6><b>नोंदणी केली असल्यास LOGIN बटण वर CLICK करा. </b></h6>
-                        </center>
-                    </div> -->
-                    <hr>
-                    <!-- <p class="text-center" style="font-size:14px;">If you have already created an account, please click
-                        login button</p>
-                    <center><a href="studentlogin.php" class="btn" style="background-color:#1cc688;">LOGIN</a></center> -->
                 </div>
                 <div class="col-md-6 mt-4">
                     <h6 style="color:red;"><b>Registration Fee Form</b></h6>

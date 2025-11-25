@@ -4,51 +4,73 @@
 
 namespace Composer\Autoload;
 
-class ComposerStaticInit19dce85914a0d40ff610e42a7553729f
+class ComposerStaticInitcd69c249777fc2bd394551bb71bc6971
 {
     public static $files = array (
-        '941748b3c8cae4466c827dfb5ca9602a' => __DIR__ . '/..' . '/rmccue/requests/library/Deprecated.php',
-        '13906c19e3d8fcd1341b24ed4d51cf72' => __DIR__ . '/..' . '/razorpay/razorpay/Deprecated.php',
+        '6124b4c8570aa390c21fafd04a26c69f' => __DIR__ . '/..' . '/myclabs/deep-copy/src/DeepCopy/deep_copy.php',
     );
 
     public static $prefixLengthsPsr4 = array (
-        'W' => 
+        's' => 
         array (
-            'WpOrg\\Requests\\' => 15,
+            'setasign\\Fpdi\\' => 14,
         ),
-        'R' => 
+        'P' => 
         array (
-            'Razorpay\\Tests\\' => 15,
-            'Razorpay\\Api\\' => 13,
+            'Psr\\Log\\' => 8,
+            'Psr\\Http\\Message\\' => 17,
+        ),
+        'M' => 
+        array (
+            'Mpdf\\' => 5,
+        ),
+        'H' => 
+        array (
+            'Http\\Message\\' => 13,
+        ),
+        'D' => 
+        array (
+            'DeepCopy\\' => 9,
         ),
     );
 
     public static $prefixDirsPsr4 = array (
-        'WpOrg\\Requests\\' => 
+        'setasign\\Fpdi\\' => 
         array (
-            0 => __DIR__ . '/..' . '/rmccue/requests/src',
+            0 => __DIR__ . '/..' . '/setasign/fpdi/src',
         ),
-        'Razorpay\\Tests\\' => 
+        'Psr\\Log\\' => 
         array (
-            0 => __DIR__ . '/..' . '/razorpay/razorpay/tests',
+            0 => __DIR__ . '/..' . '/psr/log/Psr/Log',
         ),
-        'Razorpay\\Api\\' => 
+        'Psr\\Http\\Message\\' => 
         array (
-            0 => __DIR__ . '/..' . '/razorpay/razorpay/src',
+            0 => __DIR__ . '/..' . '/psr/http-message/src',
+        ),
+        'Mpdf\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/mpdf/mpdf/src',
+        ),
+        'Http\\Message\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/php-http/message-factory/src',
+        ),
+        'DeepCopy\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/myclabs/deep-copy/src/DeepCopy',
         ),
     );
 
     public static $classMap = array (
         'Composer\\InstalledVersions' => __DIR__ . '/..' . '/composer/InstalledVersions.php',
-        'Requests' => __DIR__ . '/..' . '/rmccue/requests/library/Requests.php',
     );
 
     public static function getInitializer(ClassLoader $loader)
     {
         return \Closure::bind(function () use ($loader) {
-            $loader->prefixLengthsPsr4 = ComposerStaticInit19dce85914a0d40ff610e42a7553729f::$prefixLengthsPsr4;
-            $loader->prefixDirsPsr4 = ComposerStaticInit19dce85914a0d40ff610e42a7553729f::$prefixDirsPsr4;
-            $loader->classMap = ComposerStaticInit19dce85914a0d40ff610e42a7553729f::$classMap;
+            $loader->prefixLengthsPsr4 = ComposerStaticInitcd69c249777fc2bd394551bb71bc6971::$prefixLengthsPsr4;
+            $loader->prefixDirsPsr4 = ComposerStaticInitcd69c249777fc2bd394551bb71bc6971::$prefixDirsPsr4;
+            $loader->classMap = ComposerStaticInitcd69c249777fc2bd394551bb71bc6971::$classMap;
 
         }, null, ClassLoader::class);
     }
